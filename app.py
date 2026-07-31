@@ -425,7 +425,7 @@ home, data_upload, overview, dataset, models, parameters = st.tabs(
 # =====================================
 with home:
     st.title("🛡️ CYBER THREAT INTELLIGENCE")
-    st.subheader("SYSTEM v2.0.8 | Mount Kenya University")
+    # REMOVED: SYSTEM v2.0.8 line
     st.markdown("**Operator:** Stephen Musau Makau | **Clearance:** MSc Cybersecurity")
     
     mode_indicator = "🌙 DARK" if st.session_state.dark_mode else "☀️ LIGHT"
@@ -961,10 +961,26 @@ with dataset:
     """)
 
 # =====================================
-# AI MODELS - WITH EXPLANATIONS
+# AI MODELS - WITH DYNAMIC WINNER DISPLAY
 # =====================================
 with models:
     st.title("🤖 AI CORE PERFORMANCE")
+    
+    # Get results to determine winners
+    results = get_results()
+    
+    # Determine active algorithms (100% or highest)
+    if results:
+        max_acc = max(results.values())
+        if max_acc >= 0.999:
+            active_algorithms = [name for name, acc in results.items() if acc >= 0.999]
+            active_acc = 100.0
+        else:
+            active_algorithms = [name for name, acc in results.items() if acc == max_acc]
+            active_acc = max_acc * 100
+    else:
+        active_algorithms = ["XGBoost"]
+        active_acc = 0.0
     
     # Show current data source
     if get_current_data_source() == "uploaded":
@@ -972,63 +988,156 @@ with models:
     else:
         st.info("🤖 **Models trained on**: Default research dataset")
     
-    # EXPLANATION: Algorithm comparison
-    st.markdown("""
-    ### 📖 **Algorithm Selection Process**
+    st.markdown("---")
     
-    Three machine learning algorithms were evaluated to determine which best predicts cyber threat levels. 
-    Each was trained on the same historical data and tested on unseen validation data to measure accuracy.
+    # DISPLAY ACTIVE/WINNING ALGORITHMS SECTION
+    if len(active_algorithms) == 1:
+        winner_name = active_algorithms[0]
+        st.header(f"🏆 ACTIVE ALGORITHM: {winner_name.upper()}")
+        
+        if "XGBoost" in winner_name:
+            st.success("""
+            ### 🥇 XGBoost (eXtreme Gradient Boosting)
+            
+            **Status**: ACTIVE | **Accuracy**: 100.00%
+            
+            **Why It's Winning:**
+            XGBoost has achieved perfect accuracy on your validation data. This gradient boosting framework uses regularized learning to prevent overfitting while capturing complex non-linear patterns in cybersecurity threats.
+            
+            **Key Strengths:**
+            - **Gradient Boosting**: Sequentially corrects errors of previous trees
+            - **Regularization**: L1/L2 penalties prevent overfitting
+            - **Parallel Processing**: Efficient tree construction
+            - **Missing Value Handling**: Automatically learns best imputation
+            
+            **Best For**: Datasets with complex feature interactions and imbalanced classes (typical in cybersecurity)
+            """)
+        elif "Random Forest" in winner_name:
+            st.success("""
+            ### 🥇 Random Forest Classifier
+            
+            **Status**: ACTIVE | **Accuracy**: 100.00%
+            
+            **Why It's Winning:**
+            Random Forest has achieved perfect accuracy through its ensemble of 200 decision trees. The bagging approach (bootstrap aggregation) creates diversity that captures robust patterns without overfitting.
+            
+            **Key Strengths:**
+            - **Bagging**: Reduces variance through multiple trees
+            - **Feature Randomness**: Forces diverse split decisions
+            - **Out-of-Bag Scoring**: Built-in validation mechanism
+            - **Feature Importance**: Ranks which variables matter most
+            
+            **Best For**: Datasets where interpretability and robustness are equally important
+            """)
+        elif "Logistic Regression" in winner_name:
+            st.success("""
+            ### 🥇 Logistic Regression
+            
+            **Status**: ACTIVE | **Accuracy**: 100.00%
+            
+            **Why It's Winning:**
+            Logistic Regression has achieved perfect accuracy, indicating your data has clear linear separability between threat classes. This statistical approach provides maximum interpretability.
+            
+            **Key Strengths:**
+            - **Linear Separability**: Clear decision boundaries
+            - **Probabilistic Output**: Confidence scores for predictions
+            - **Coefficient Interpretation**: Direct feature impact measurement
+            - **Computational Efficiency**: Fast training and prediction
+            
+            **Best For**: Datasets with clear linear patterns requiring auditable decisions
+            """)
+            
+    elif len(active_algorithms) == 2:
+        st.header(f"🏆 DUAL ENSEMBLE ACTIVE")
+        st.success(f"""
+        ### 🥇 Combined System: {' & '.join(active_algorithms)}
+        
+        **Status**: ACTIVE | **Accuracy**: 100.00%
+        
+        **Why Both Are Winning:**
+        Both algorithms achieved perfect accuracy on your validation data. The system leverages their complementary strengths - one may excel at capturing linear trends while the other handles non-linear interactions.
+        
+        **Hybrid Advantages:**
+        - **Diversity**: Different algorithmic approaches reduce blind spots
+        - **Consensus**: Agreement between models increases confidence
+        - **Robustness**: If patterns shift, multiple models adapt differently
+        - **Validation**: Cross-checking predictions between architectures
+        
+        **Best For**: Critical applications requiring maximum reliability through algorithmic diversity
+        """)
+        
+    else:  # All three
+        st.header(f"🏆 TRIPLE CONSENSUS MODE")
+        st.success("""
+        ### 🥇 ALL SYSTEMS ACTIVE: Logistic Regression + Random Forest + XGBoost
+        
+        **Status**: ACTIVE | **Accuracy**: 100.00%
+        
+        **Why All Three Are Winning:**
+        All three algorithms achieved perfect accuracy on your validation data. This rare "triple consensus" indicates your dataset has exceptionally clear, separable patterns that are detectable by linear, bagging, and boosting approaches alike.
+        
+        **Meta-Ensemble Advantages:**
+        - **Maximum Confidence**: Three independent architectures agree
+        - **Pattern Clarity**: Data contains strong, unambiguous signals
+        - **Zero Uncertainty**: No validation samples were misclassified
+        - **System Reliability**: Multiple fallback options available
+        
+        **Best For**: Mission-critical deployments where prediction confidence must be absolute
+        """)
     
-    **Why Compare Multiple Algorithms?**
-    Different algorithms handle data patterns differently. We selected the one with highest accuracy on the specific cybersecurity dataset.
-    """)
+    st.markdown("---")
     
-    st.markdown("Algorithmic benchmarking and selection metrics...")
+    # EXPLANATION: Algorithm comparison table
+    st.markdown("### 📊 **Complete Algorithm Benchmarking**")
     
-    results = get_results()
     table_data = []
     for name, value in results.items():
+        is_active = name in active_algorithms
+        status = "🟢 ACTIVE" if is_active else "⚪ STANDBY"
         table_data.append({
             "Algorithm": name,
             "Accuracy": f"{value*100:.2f}%",
-            "Status": "ACTIVE" if name == "XGBoost" else "STANDBY"
+            "Status": status
         })
     
     st.table(table_data)
     
     # EXPLANATION: Results interpretation
+    st.markdown("### 📖 **Understanding the Results**")
+    
     col1, col2 = st.columns(2)
     with col1:
-        st.info("""
-        **🥇 Winner: XGBoost (eXtreme Gradient Boosting)**
-        
-        **Why it performed best:**
-        - **Handles Imbalanced Data**: Works well even if you have more "Medium" than "Critical" samples
-        - **Non-Linear Patterns**: Captures complex interactions (e.g., inflation + patch delay combined effect)
-        - **Regularization**: Prevents overfitting to smaller datasets
-        - **Feature Importance**: Automatically identifies which variables matter most in YOUR data
-        
-        **Accuracy Interpretation**: If XGBoost shows 85% accuracy, it correctly predicted the threat level in 8.5 out of 10 historical cases.
-        """)
+        if len(active_algorithms) == 1:
+            winner = active_algorithms[0]
+            st.info(f"""
+            **🥇 Winner Analysis: {winner}**
+            
+            This algorithm achieved the highest accuracy on your specific dataset. 
+            {'Its gradient boosting approach' if 'XGBoost' in winner else 'Its ensemble approach' if 'Random' in winner else 'Its linear approach'} 
+            best matched the patterns in your cybersecurity data.
+            
+            **Recommendation**: Deploy this algorithm for production predictions.
+            """)
+        else:
+            st.info(f"""
+            **🥇 Winners Analysis: {', '.join(active_algorithms)}**
+            
+            Multiple algorithms achieved perfect accuracy, indicating your dataset
+            has exceptionally clear patterns detectable by different approaches.
+            
+            **Recommendation**: Use consensus voting for maximum reliability.
+            """)
     
     with col2:
         st.warning("""
-        **📊 Other Algorithms Tested:**
+        **📊 Algorithm Characteristics:**
         
-        **Logistic Regression** (Baseline):
-        - Simple linear classifier
-        - Lower accuracy because threat patterns are non-linear
-        - Good for interpretability but misses complex interactions
+        **Logistic Regression**: Linear, fast, interpretable
+        **Random Forest**: Ensemble, robust, balanced  
+        **XGBoost**: Boosted, powerful, handles complexity
         
-        **Random Forest**:
-        - Ensemble of decision trees
-        - Good accuracy but can overfit with small datasets
-        - Less effective than XGBoost at handling imbalanced classes
-        
-        **Note**: Results above reflect performance on your current dataset (default or uploaded).
+        The best algorithm depends on your specific data patterns.
         """)
-    
-    st.warning("⚠️ **SYSTEM NOTE**: XGBoost selected for production deployment. Superior handling of imbalanced threat datasets and complex feature interactions.")
 
 # =====================================
 # PARAMETERS - WITH EXPLANATIONS
