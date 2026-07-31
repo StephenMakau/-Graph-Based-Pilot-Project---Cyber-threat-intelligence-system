@@ -330,37 +330,34 @@ def create_futuristic_graph(df):
                 title='Timeline'
             ),
             yaxis=dict(
-                title='Attack Volume',
+                title=dict(text='Attack Volume', font=dict(size=12, color='#06b6d4')),
                 showgrid=True,
                 gridcolor=colors['grid'],
                 gridwidth=1,
                 zeroline=False,
                 linecolor='#06b6d4',
                 linewidth=2,
-                tickfont=dict(size=10),
-                titlefont=dict(size=12, color='#06b6d4')
+                tickfont=dict(size=10)
             ),
             yaxis2=dict(
-                title='CVE Count',
+                title=dict(text='CVE Count', font=dict(size=12, color='#ff1744')),
                 showgrid=True,
                 gridcolor=colors['grid'],
                 gridwidth=1,
                 zeroline=False,
                 linecolor='#ff1744',
                 linewidth=2,
-                tickfont=dict(size=10),
-                titlefont=dict(size=12, color='#ff1744')
+                tickfont=dict(size=10)
             ),
             yaxis3=dict(
-                title='Patch Delay (Days)',
+                title=dict(text='Patch Delay (Days)', font=dict(size=12, color='#ffd700')),
                 overlaying='y2',
                 side='right',
                 showgrid=False,
                 zeroline=False,
                 linecolor='#ffd700',
                 linewidth=2,
-                tickfont=dict(size=10, color='#ffd700'),
-                titlefont=dict(size=12, color='#ffd700')
+                tickfont=dict(size=10, color='#ffd700')
             ),
             title=dict(
                 text='📊 CYBER THREAT INTELLIGENCE // VISUALIZATION MODULE',
