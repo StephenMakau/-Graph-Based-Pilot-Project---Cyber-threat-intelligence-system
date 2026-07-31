@@ -482,13 +482,22 @@ with home:
     # 3. FUTURISTIC GRAPH: Visual Data Intelligence
     st.markdown("### 📡 THREAT VISUALIZATION MATRIX")
     
+    # Show current data source for the graph
+    current_source = get_current_data_source()
+    if current_source == "uploaded":
+        st.info("📊 Displaying **Uploaded Dataset** Visualization")
+    else:
+        st.info("📊 Displaying **Default Dataset** Visualization")
+    
     # Get current dataset for visualization
     viz_data = get_dataset()
     
-    # Create and display the futuristic graph
+    # Create and display the futuristic graph with unique key based on data source
     fig = create_futuristic_graph(viz_data)
     if fig is not None:
-        st.plotly_chart(fig, use_container_width=True, height=600)
+        # KEY FIX: Add unique key based on data source and data shape to force re-render
+        chart_key = f"threat_graph_{current_source}_{len(viz_data)}"
+        st.plotly_chart(fig, use_container_width=True, height=600, key=chart_key)
     
     # Graph explanation
     with st.expander("📖 **Graph Interpretation Guide**", expanded=False):
@@ -687,7 +696,9 @@ with data_upload:
                             st.session_state.training_status = "success"
                             st.success(f"✅ {message}")
                             st.balloons()
-                            st.info("🔄 Navigate to **HOME** or **AI MODELS** tabs to see results from your data!")
+                            st.info("🔄 Navigate to **HOME** tab to see updated graph with your data!")
+                            # KEY FIX: Force page rerun to refresh graph with new data
+                            st.rerun()
                         else:
                             st.session_state.training_status = "error"
                             st.error(f"❌ {message}")
@@ -709,6 +720,8 @@ with data_upload:
         train_on_uploaded_data(None)
         st.success("✅ System reset to default dataset")
         st.info("The system is now using the original 2020-2025 research data.")
+        # KEY FIX: Force page rerun to refresh graph
+        st.rerun()
 
 # =====================================
 # PROJECT OVERVIEW - WITH EXPLANATIONS
