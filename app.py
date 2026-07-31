@@ -5,6 +5,7 @@ import pandas as pd
 import io
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+import numpy as np
 
 from cyber_threat_model import (
     predict_2027,
@@ -158,6 +159,66 @@ else:
     """
 
 st.markdown(theme_css + mobile_css, unsafe_allow_html=True)
+
+# =====================================
+# HELPER FUNCTION TO ANALYZE DATA PATTERNS
+# =====================================
+def analyze_dataset_patterns(df):
+    """Analyze dataset to extract key patterns dynamically"""
+    patterns = []
+    
+    if df.empty:
+        return ["No data available for analysis."]
+    
+    # 1. Find Critical threat periods
+    critical_rows = df[df['Threat_Level'] == 'Critical']
+    if not critical_rows.empty:
+        years = critical_rows['Year'].unique()
+        if len(years) == 1:
+            patterns.append(f"**Critical Peak**: The only 'Critical' threat period occurred in **{years[0]}** when DDoS attacks reached {critical_rows['DDoS_Attacks'].max():,} and malware hit {critical_rows['Malware_Attacks'].max():,} incidents.")
+        else:
+            patterns.append(f"**Critical Periods**: Critical threat levels observed in **{', '.join(map(str, years))}** with peak DDoS of {critical_rows['DDoS_Attacks'].max():,}.")
+    else:
+        patterns.append("**No Critical Threats**: The dataset contains no Critical threat classifications - all periods were Medium or High risk.")
+    
+    # 2. Economic Environment correlation
+    econ_threat = df.groupby(['Economic_Environment', 'Threat_Level']).size().unstack(fill_value=0)
+    high_cost_critical = df[(df['Economic_Environment'] == 'High_Cost') & (df['Threat_Level'] == 'Critical')]
+    if not high_cost_critical.empty:
+        patterns.append(f"**Economic Stress Correlation**: High_Cost economic periods show elevated threats, with {len(high_cost_critical)} Critical classification(s).")
+    
+    # 3. Patch Delay impact
+    low_patch = df[df['Patch_Delay_Days'] < 10]
+    if not low_patch.empty:
+        threat_dist = low_patch['Threat_Level'].value_counts()
+        dominant = threat_dist.index[0] if not threat_dist.empty else "Unknown"
+        patterns.append(f"**Patch Speed Impact**: When patch delays drop below 10 days, threat levels trend toward **{dominant}** ({threat_dist.get(dominant, 0)} of {len(low_patch)} periods).")
+    
+    # 4. Attack volume trends
+    df_sorted = df.sort_values(['Year', 'Month'])
+    first_ddos = df_sorted['DDoS_Attacks'].iloc[0] if len(df_sorted) > 0 else 0
+    last_ddos = df_sorted['DDoS_Attacks'].iloc[-1] if len(df_sorted) > 0 else 0
+    
+    if last_ddos > first_ddos * 1.5:
+        patterns.append(f"**Escalation Trend**: DDoS attacks increased from {first_ddos:,} to {last_ddos:,} ({((last_ddos/first_ddos-1)*100):.0f}% growth) across the observation period.")
+    elif last_ddos < first_ddos * 0.7:
+        patterns.append(f"**Declining Trend**: DDoS attacks decreased from {first_ddos:,} to {last_ddos:,} ({((1-last_ddos/first_ddos)*100):.0f}% reduction) - defensive measures may be working.")
+    else:
+        patterns.append(f"**Stable Volume**: DDoS attacks remained relatively stable between {first_ddos:,} and {last_ddos:,} incidents.")
+    
+    # 5. CVE correlation
+    high_cve = df[df['Critical_CVEs'] > df['Critical_CVEs'].mean() + df['Critical_CVEs'].std()]
+    if not high_cve.empty:
+        high_threat_pct = (high_cve['Threat_Level'] != 'Medium').mean() * 100
+        patterns.append(f"**Vulnerability Window**: High CVE periods (>{df['Critical_CVEs'].mean() + df['Critical_CVEs'].std():.0f}) correlate with elevated threats {high_threat_pct:.0f}% of the time.")
+    
+    # 6. Inflation correlation
+    high_inflation = df[df['Inflation_Rate'] > 7.0]
+    if not high_inflation.empty:
+        threat_dist = high_inflation['Threat_Level'].value_counts()
+        patterns.append(f"**Economic Pressure**: High inflation periods (>{7.0}%) show threat distribution: {dict(threat_dist)}.")
+    
+    return patterns
 
 # =====================================
 # FUTURISTIC GRAPH FUNCTION
@@ -911,10 +972,13 @@ with overview:
     st.info("🔒 **SECURITY PROTOCOL**: All data displayed is synthetic/anonymized for research purposes. No real-time government data is exposed.")
 
 # =====================================
-# DATASET - WITH EXPLANATIONS
+# DATASET - WITH DYNAMIC PATTERN ANALYSIS
 # =====================================
 with dataset:
     st.title("📊 DATA MATRIX")
+    
+    # Get current dataset for analysis
+    current_df = get_dataset()
     
     # Show current data source
     if get_current_data_source() == "uploaded":
@@ -941,24 +1005,43 @@ with dataset:
     
     height = 400 if st.session_state.mobile_view else 500
     st.dataframe(
-        get_dataset(),
+        current_df,
         use_container_width=True,
         height=height
     )
     
-    # EXPLANATION: Data patterns
-    st.success("""
-    **📈 Key Patterns Visible in This Data:**
+    # DYNAMIC PATTERN ANALYSIS
+    st.markdown("---")
+    st.subheader("📈 **Key Patterns Visible in This Data**")
     
-    1. **2023 Peak**: The only "Critical" threat period occurred when DDoS attacks reached 3,200 and malware hit 15,000 incidents
-    2. **Economic Correlation**: High/Critical threats align with "High_Cost" economic environment and inflation above 7%
-    3. **Patch Delay Impact**: When patch delays drop below 10 days, threat levels tend to decrease (faster patching = less vulnerability)
-    4. **Attack Escalation**: Clear upward trend in attack volumes from 2020-2023, with slight stabilization in 2024-2025
+    # Analyze actual patterns in the current dataset
+    patterns = analyze_dataset_patterns(current_df)
     
-    **Training Process**: The model learned these patterns to recognize that specific combinations of these values predict future threat levels.
+    # Display each pattern as a bullet point
+    for pattern in patterns:
+        st.markdown(f"• {pattern}")
     
-    **💡 Tip**: Upload your own data in the **DATA UPLOAD** tab to see patterns specific to your organization!
-    """)
+    # Additional dataset statistics
+    st.markdown("---")
+    st.subheader("📊 **Dataset Statistics**")
+    
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("Total Records", len(current_df))
+    with col2:
+        threat_dist = current_df['Threat_Level'].value_counts()
+        most_common = threat_dist.index[0] if not threat_dist.empty else "N/A"
+        st.metric("Most Common Threat", most_common)
+    with col3:
+        avg_ddos = current_df['DDoS_Attacks'].mean() if 'DDoS_Attacks' in current_df.columns else 0
+        st.metric("Avg DDoS", f"{avg_ddos:,.0f}")
+    with col4:
+        year_range = f"{current_df['Year'].min()}-{current_df['Year'].max()}" if 'Year' in current_df.columns and not current_df.empty else "N/A"
+        st.metric("Year Range", year_range)
+    
+    st.caption("💡 **Training Process**: The model learned these patterns to recognize that specific combinations of these values predict future threat levels.")
+    
+    st.info("💡 **Tip**: Upload your own data in the **DATA UPLOAD** tab to see patterns specific to your organization!")
 
 # =====================================
 # AI MODELS - WITH DYNAMIC WINNER DISPLAY
@@ -1140,39 +1223,119 @@ with models:
         """)
 
 # =====================================
-# PARAMETERS - WITH EXPLANATIONS
+# PARAMETERS - WITH DATA-SPECIFIC INSIGHTS
 # =====================================
 with parameters:
     st.title("⚙️ SYSTEM PARAMETERS")
     
-    # EXPLANATION: Parameters meaning
-    st.markdown("""
+    # Get current prediction for context
+    try:
+        current_prediction = predict_2027()
+        params_df = get_parameters()
+    except:
+        current_prediction = "Unknown"
+        params_df = get_parameters()
+    
+    # EXPLANATION: Parameters meaning with context
+    st.markdown(f"""
     ### 📖 **2027 Projection Parameters**
+    
+    **Current Prediction for 2027**: {'🟢 **MODERATE**' if current_prediction == 'Medium' else '🟠 **HIGH**' if current_prediction == 'High' else '🔴 **CRITICAL**' if current_prediction == 'Critical' else '⚪ **Unknown**'}
     
     These values represent **projected conditions for August 2027** based on trend analysis, economic forecasts, and technological growth projections. 
     The model uses these 12 inputs to classify the threat level.
     
     **How Projections Are Derived:**
-    - **Attack Volumes**: Extrapolated from historical growth curves
+    - **Attack Volumes**: Extrapolated from historical growth curves in your dataset
     - **CVE Counts**: Based on National Vulnerability Database growth rates
     - **Economic**: Central Bank inflation forecasts and GDP projections
     - **Operational**: Expected traffic volume and patch management efficiency targets
     
-    **Note**: These projections remain constant, but the model's interpretation of them changes based on patterns learned from your uploaded data!
+    **Note**: These projections remain constant, but the model's interpretation changes based on patterns learned from your {'uploaded' if get_current_data_source() == 'uploaded' else 'default'} data!
     """)
     
-    st.markdown("Feature configuration for 2027 threat projection horizon:")
+    st.markdown("### 📋 **Feature Configuration for 2027 Threat Projection**")
     
     height = 300 if st.session_state.mobile_view else 400
     st.dataframe(
-        get_parameters(),
+        params_df,
         use_container_width=True,
         height=height
     )
     
+    # DATA-SPECIFIC PARAMETER ANALYSIS
+    st.markdown("---")
+    st.subheader("🔍 **Why These Parameters Lead to {}**".format(current_prediction if current_prediction != "Unknown" else "This Prediction"))
+    
+    # Get current dataset for comparison
+    analysis_df = get_dataset()
+    
+    if not analysis_df.empty and current_prediction != "Unknown":
+        # Analyze how 2027 params compare to historical data
+        ddos_2027 = 4200
+        malware_2027 = 18500
+        cve_2027 = 95
+        patch_2027 = 9
+        
+        # Compare to historical ranges
+        ddos_max = analysis_df['DDoS_Attacks'].max() if 'DDoS_Attacks' in analysis_df.columns else 0
+        ddos_mean = analysis_df['DDoS_Attacks'].mean() if 'DDoS_Attacks' in analysis_df.columns else 0
+        malware_max = analysis_df['Malware_Attacks'].max() if 'Malware_Attacks' in analysis_df.columns else 0
+        cve_max = analysis_df['Critical_CVEs'].max() if 'Critical_CVEs' in analysis_df.columns else 0
+        patch_min = analysis_df['Patch_Delay_Days'].min() if 'Patch_Delay_Days' in analysis_df.columns else 20
+        
+        # Find historical periods with similar conditions
+        similar_periods = analysis_df[
+            (analysis_df['DDoS_Attacks'] > ddos_2027 * 0.8) & 
+            (analysis_df['Critical_CVEs'] > cve_2027 * 0.8)
+        ]
+        
+        if not similar_periods.empty:
+            similar_threats = similar_periods['Threat_Level'].value_counts()
+            st.info(f"""
+            **Historical Pattern Match**: The 2027 projection parameters closely resemble **{len(similar_periods)} historical period(s)** in your dataset.
+            
+            During similar conditions (DDoS >{ddos_2027*0.8:,.0f}, CVEs >{cve_2027*0.8:.0f}), the threat level was:
+            {dict(similar_threats)}
+            
+            This historical correlation strongly influences the **{current_prediction}** prediction.
+            """)
+        
+        # Parameter-specific insights
+        insights = []
+        
+        if ddos_2027 > ddos_max * 0.9:
+            insights.append(f"• **DDoS Projection ({ddos_2027:,})** is near historical maximum ({ddos_max:,}), indicating sustained attack capability")
+        elif ddos_2027 < ddos_mean:
+            insights.append(f"• **DDoS Projection ({ddos_2027:,})** is below historical average ({ddos_mean:,.0f}), suggesting defensive improvements")
+            
+        if cve_2027 > cve_max * 0.9:
+            insights.append(f"• **CVE Count ({cve_2027})** represents near-peak vulnerability exposure (max: {cve_max})")
+            
+        if patch_2027 <= patch_min:
+            insights.append(f"• **Patch Delay ({patch_2027} days)** is at historical minimum, indicating improved security posture")
+        elif patch_2027 > 10:
+            insights.append(f"• **Patch Delay ({patch_2027} days)** exceeds 10-day threshold, creating vulnerability windows")
+        
+        # Economic context
+        econ_2027 = "Stable"
+        high_cost_periods = analysis_df[analysis_df['Economic_Environment'] == 'High_Cost']
+        if not high_cost_periods.empty:
+            high_threat_pct = (high_cost_periods['Threat_Level'] != 'Medium').mean() * 100
+            if econ_2027 == "Stable" and high_threat_pct > 50:
+                insights.append(f"• **Stable Economic Environment** contrasts with your data showing {high_threat_pct:.0f}% of High_Cost periods had elevated threats")
+        
+        if insights:
+            st.markdown("### 🎯 **Key Parameter Insights**")
+            for insight in insights:
+                st.markdown(insight)
+    
     # EXPLANATION: Parameter significance
+    st.markdown("---")
+    st.subheader("⚠️ **Parameter Significance Analysis**")
+    
     st.warning("""
-    **⚠️ Critical Insight: Parameter Significance**
+    **Critical Insight: Parameter Significance**
     
     Analysis reveals which inputs most influence the threat prediction:
     
@@ -1185,3 +1348,11 @@ with parameters:
     
     **Custom Data Impact**: When you upload your own data, the model learns different patterns and may weight these factors differently based on your specific threat landscape!
     """)
+    
+    # Context-specific recommendation
+    if current_prediction == "Critical":
+        st.error("🚨 **CRITICAL RECOMMENDATION**: Given the projected parameters exceed multiple historical thresholds simultaneously, immediate executive review of security posture is advised.")
+    elif current_prediction == "High":
+        st.warning("⚠️ **HIGH ALERT RECOMMENDATION**: Review defensive protocols and ensure patch management can maintain the projected 9-day deployment window.")
+    else:
+        st.success("✅ **STABLE OUTLOOK**: Projected parameters suggest manageable risk levels. Maintain standard monitoring and continue current security investments.")
