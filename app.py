@@ -160,7 +160,7 @@ else:
 st.markdown(theme_css + mobile_css, unsafe_allow_html=True)
 
 # =====================================
-# FUTURISTIC GRAPH FUNCTION (FIXED)
+# FUTURISTIC GRAPH FUNCTION
 # =====================================
 def create_futuristic_graph(df):
     """
@@ -439,10 +439,38 @@ with home:
     try:
         prediction = predict_2027()
         accuracy = get_model_accuracy() * 100
+        # Get all results for algorithm selection
+        all_results = get_results()
     except Exception as e:
         st.error(f"⚠️ System Error: {e}")
         prediction = "Unknown"
         accuracy = 0.0
+        all_results = {}
+
+    # Determine best algorithm(s) - those at 100% or highest accuracy
+    if all_results:
+        max_acc = max(all_results.values())
+        # If max is 1.0 (100%), get all that achieved 100%, else get the highest one(s)
+        if max_acc >= 0.999:  # Using 0.999 to handle floating point precision
+            best_algorithms = [name for name, acc in all_results.items() if acc >= 0.999]
+            best_acc_pct = 100.0
+        else:
+            best_algorithms = [name for name, acc in all_results.items() if acc == max_acc]
+            best_acc_pct = max_acc * 100
+    else:
+        best_algorithms = ["XGBoost"]  # Fallback
+        best_acc_pct = accuracy
+
+    # Format algorithm display name
+    if len(best_algorithms) == 1:
+        algo_display = best_algorithms[0].upper().replace(" ", "_")
+        algo_short = best_algorithms[0]
+    elif len(best_algorithms) == 2:
+        algo_display = "ENSEMBLE_DUAL"
+        algo_short = " + ".join(best_algorithms)
+    else:
+        algo_display = "ENSEMBLE_TRIPLE"
+        algo_short = "ALL_SYSTEMS"
 
     # 2. OUTCOME: Display Threat Projection FIRST (Top Priority)
     st.header("🚨 THREAT PROJECTION // 2027")
@@ -537,22 +565,66 @@ with home:
         c1, c2, c3 = st.columns(3)
 
     with c1:
-        st.markdown("""
+        # Dynamic algorithm display based on 100% performers
+        if len(best_algorithms) == 1:
+            algo_name = best_algorithms[0]
+            algo_code = algo_name.upper().replace(" ", "_")
+            subtitle = "ML.Engine.Active" if "XGBoost" in algo_name else "Statistical.Engine.Active"
+            
+            # Single algorithm explanation
+            if "XGBoost" in algo_name:
+                desc = "eXtreme Gradient Boosting | Advanced ensemble decision trees with superior pattern recognition"
+            elif "Random Forest" in algo_name:
+                desc = "Random Forest Classifier | Bagging ensemble method reducing overfitting through multiple decision trees"
+            elif "Logistic Regression" in algo_name:
+                desc = "Logistic Regression | Linear statistical model providing high interpretability and baseline performance"
+            else:
+                desc = "Machine Learning Engine"
+                
+        elif len(best_algorithms) == 2:
+            algo_code = "DUAL_ENSEMBLE"
+            algo_name = " + ".join(best_algorithms)
+            subtitle = "Hybrid.Engine.Active"
+            desc = f"Combined {best_algorithms[0]} & {best_algorithms[1]} | Hybrid approach leveraging multiple algorithmic strengths"
+        else:
+            algo_code = "TRIPLE_ENSEMBLE"
+            algo_name = "ALL_SYSTEMS"
+            subtitle = "Meta.Ensemble.Active"
+            desc = "Full Algorithmic Consensus | All three models achieving perfect accuracy - maximum reliability mode"
+        
+        st.markdown(f"""
         <div class="tech-container" style="text-align: center;">
-            <h4 style="color: #94a3b8; margin:15px 0 0 0; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 2px; font-family: Inter, sans-serif;">Core Algorithm</h4>
-            <h2 style="margin: 20px 0; color: #06b6d4; font-family: JetBrains Mono, monospace !important; font-size: 2.6rem; font-weight: 700; text-shadow: 0 0 15px rgba(6,182,212,0.5);">XGBoost</h2>
-            <p style="color: #64748b; font-size: 0.95rem; font-family: Calibri, sans-serif; margin-bottom: 15px;">ML.Engine.GradientBoost</p>
+            <h4 style="color: #94a3b8; margin:15px 0 0 0; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 2px; font-family: Inter, sans-serif;">Core Algorithm {'(s)' if len(best_algorithms) > 1 else ''}</h4>
+            <h2 style="margin: 20px 0; color: #06b6d4; font-family: JetBrains Mono, monospace !important; font-size: {'2.0rem' if len(best_algorithms) > 1 else '2.6rem'}; font-weight: 700; text-shadow: 0 0 15px rgba(6,182,212,0.5);">{algo_code}</h2>
+            <p style="color: #64748b; font-size: 0.95rem; font-family: Calibri, sans-serif; margin-bottom: 15px;">{subtitle}</p>
         </div>
         """, unsafe_allow_html=True)
-        st.caption("💡 **XGBoost** (eXtreme Gradient Boosting) is an advanced ML algorithm that combines multiple decision trees to make predictions. It was selected for its superior accuracy in handling cybersecurity data.")
+        
+        # Dynamic explanation based on which algorithm(s) won
+        if len(best_algorithms) == 1:
+            if "XGBoost" in best_algorithms[0]:
+                st.caption("💡 **XGBoost** uses gradient boosting to combine weak learners into a strong predictor. Excels at capturing non-linear relationships in cybersecurity data and handles imbalanced datasets effectively.")
+            elif "Random Forest" in best_algorithms[0]:
+                st.caption("💡 **Random Forest** builds multiple decision trees and merges their predictions. Reduces overfitting through bagging and provides robust performance across varied threat patterns.")
+            elif "Logistic Regression" in best_algorithms[0]:
+                st.caption("💡 **Logistic Regression** provides a linear probabilistic approach. While simpler than ensemble methods, it offers high interpretability and efficient computation for real-time predictions.")
+        elif len(best_algorithms) == 2:
+            st.caption(f"💡 **Dual Algorithm Mode**: Both {best_algorithms[0]} and {best_algorithms[1]} achieved optimal performance. The system leverages complementary strengths - ensemble diversity meets statistical rigor.")
+        else:
+            st.caption("💡 **Triple Consensus Mode**: All three algorithms achieved 100% accuracy on validation data. This rare state indicates extremely clear patterns in your dataset, providing maximum confidence in predictions.")
 
     with c2:
         st.metric(
             "🎯 MODEL ACCURACY",
-            f"{accuracy:.2f}%",
+            f"{best_acc_pct:.2f}%",
             help="Training validation score"
         )
-        st.caption("💡 This percentage indicates how often the model correctly predicted historical threat levels. Above 80% is considered reliable for operational use.")
+        if best_acc_pct >= 99.9:
+            st.caption("🌟 **PERFECT SCORE**: Optimal prediction reliability achieved. The model(s) correctly classified all validation samples.")
+        elif best_acc_pct >= 90:
+            st.caption("✅ **HIGH RELIABILITY**: Strong predictive performance suitable for operational deployment.")
+        else:
+            st.caption("⚠️ **MODERATE RELIABILITY**: Consider uploading more historical data to improve accuracy.")
 
     with c3:
         st.markdown("""
@@ -562,22 +634,48 @@ with home:
             <p style="color: #64748b; font-size: 0.95rem; font-family: Calibri, sans-serif; margin-bottom: 15px;">Forecast.Horizon</p>
         </div>
         """, unsafe_allow_html=True)
-        st.caption("💡 The model projects threat levels 2 years ahead using trend analysis of attack patterns, economic indicators, and system vulnerabilities from 2020-2025 data.")
+        st.caption("💡 The model projects threat levels 2 years ahead using trend analysis of attack patterns, economic indicators, and system vulnerabilities from historical data.")
 
     st.divider()
 
     # 4. EDUCATION: Methodology & Explanations (Moved Below Outcome)
     st.markdown("### 🧠 **Prediction Methodology**")
-    st.info("""
-    **How the 2027 Prediction is Generated:**
     
-    1. **Data Input**: The model receives projected values for 12 parameters (DDoS attacks, malware volume, CVE counts, inflation, GDP, etc.)
-    2. **Pattern Recognition**: XGBoost compares these projections against historical patterns where similar conditions resulted in specific threat levels
-    3. **Classification**: The system classifies the 2027 scenario into one of three categories: Moderate, High, or Critical
-    4. **Confidence**: The accuracy metric indicates how much trust to place in this prediction based on past performance
-    
-    **Why This Matters**: Early warning allows security teams to allocate resources proactively rather than reacting to attacks after they occur.
-    """)
+    # Dynamic methodology based on active algorithm(s)
+    if len(best_algorithms) == 1 and "Logistic Regression" in best_algorithms[0]:
+        st.info("""
+        **How the 2027 Prediction is Generated (Logistic Regression Mode):**
+        
+        1. **Linear Classification**: The model calculates probability scores for each threat level (Medium/High/Critical) using weighted linear combinations of input features
+        2. **Sigmoid Activation**: Probabilities are passed through a logistic function to ensure outputs fall between 0 and 1
+        3. **Decision Boundary**: The class with highest probability above threshold (0.5) is selected as the prediction
+        4. **Interpretability**: Coefficients reveal which factors most influence threat levels (e.g., positive weight on CVE count increases Critical probability)
+        
+        **Why This Matters**: While less complex than ensemble methods, logistic regression provides transparent, auditable predictions crucial for government security decisions.
+        """)
+    elif len(best_algorithms) == 1 and "Random Forest" in best_algorithms[0]:
+        st.info("""
+        **How the 2027 Prediction is Generated (Random Forest Mode):**
+        
+        1. **Ensemble Voting**: 200 decision trees independently analyze the 2027 parameters and vote on threat classification
+        2. **Bootstrap Aggregation**: Each tree trains on random subsets of historical data, ensuring robustness against outliers
+        3. **Feature Randomness**: At each split, only random subsets of features are considered, forcing diversity in tree structures
+        4. **Majority Rule**: The threat level receiving the most votes across all trees becomes the final prediction
+        
+        **Why This Matters**: Random Forest reduces overfitting risks inherent in single decision trees while maintaining interpretability through feature importance rankings.
+        """)
+    else:
+        # XGBoost or multiple algorithms
+        st.info("""
+        **How the 2027 Prediction is Generated:**
+        
+        1. **Data Input**: The model receives projected values for 12 parameters (DDoS attacks, malware volume, CVE counts, inflation, GDP, etc.)
+        2. **Pattern Recognition**: XGBoost compares these projections against historical patterns where similar conditions resulted in specific threat levels
+        3. **Classification**: The system classifies the 2027 scenario into one of three categories: Moderate, High, or Critical
+        4. **Confidence**: The accuracy metric indicates how much trust to place in this prediction based on past performance
+        
+        **Why This Matters**: Early warning allows security teams to allocate resources proactively rather than reacting to attacks after they occur.
+        """)
 
     # EXPLANATION: What this page shows
     with st.expander("📖 **How to Read This Dashboard**", expanded=False):
@@ -592,7 +690,7 @@ with home:
             - **HIGH** (Orange): Increased vigilance required
             - **CRITICAL** (Red): Maximum alert status needed
         
-        **How it Works**: The system analyzes 10 historical data points across 12 variables (attack types, economic factors, vulnerabilities) to identify patterns and predict future threats.
+        **How it Works**: The system analyzes historical data points across 12 variables (attack types, economic factors, vulnerabilities) to identify patterns and predict future threats.
         
         **📤 Upload Your Own Data**: Go to the **DATA UPLOAD** tab to use your own historical data for custom predictions!
         """)
@@ -697,7 +795,7 @@ with data_upload:
                             st.success(f"✅ {message}")
                             st.balloons()
                             st.info("🔄 Navigate to **HOME** tab to see updated graph with your data!")
-                            # KEY FIX: Force page rerun to refresh graph with new data
+                            # Force page rerun to refresh graph with new data
                             st.rerun()
                         else:
                             st.session_state.training_status = "error"
@@ -720,7 +818,7 @@ with data_upload:
         train_on_uploaded_data(None)
         st.success("✅ System reset to default dataset")
         st.info("The system is now using the original 2020-2025 research data.")
-        # KEY FIX: Force page rerun to refresh graph
+        # Force page rerun to refresh graph
         st.rerun()
 
 # =====================================
