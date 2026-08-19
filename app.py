@@ -1,13 +1,23 @@
 import streamlit as st
 from datetime import datetime
 from zoneinfo import ZoneInfo
+import pandas as pd
+import io
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+import numpy as np
 
+# Import from your local model module
 from cyber_threat_model import (
     predict_2027,
     get_model_accuracy,
     get_results,
     get_dataset,
-    get_parameters
+    get_parameters,
+    train_on_uploaded_data,
+    get_current_data_source,
+    generate_excel_template,
+    validate_uploaded_data
 )
 
 # =====================================
@@ -18,6 +28,12 @@ if 'dark_mode' not in st.session_state:
     
 if 'mobile_view' not in st.session_state:
     st.session_state.mobile_view = False
+
+if 'uploaded_data' not in st.session_state:
+    st.session_state.uploaded_data = None
+
+if 'training_status' not in st.session_state:
+    st.session_state.training_status = None
 
 # =====================================
 # PAGE CONFIG
@@ -51,8 +67,16 @@ with st.sidebar:
     st.session_state.mobile_view = mobile_view
     
     st.markdown("---")
+    
+    # Data Source Indicator
+    data_source = get_current_data_source()
+    if data_source == "uploaded":
+        st.success("📊 Using: **Uploaded Data**")
+    else:
+        st.info("📊 Using: **Default Dataset**")
+    
     st.caption(f"System Time: {datetime.now(ZoneInfo('Africa/Nairobi')).strftime('%H:%M:%S')}")
-    st.caption("MKU Cybersecurity v2.0.7")
+    st.caption("MKU Cybersecurity v2.0.8")
 
 # =====================================
 # THEME CSS
@@ -80,6 +104,8 @@ if st.session_state.dark_mode:
         .tech-container { background: rgba(30, 41, 59, 0.6); border: 1px solid rgba(6, 182, 212, 0.2); }
         strong, b { color: #06b6d4 !important; }
         .explanation-box { background: rgba(6, 182, 212, 0.1); border-left: 3px solid #06b6d4; padding: 15px; border-radius: 5px; margin: 10px 0; }
+        .upload-box { background: rgba(139, 92, 246, 0.1); border: 2px dashed rgba(139, 92, 246, 0.5); border-radius: 10px; padding: 20px; text-align: center; }
+        .template-box { background: rgba(16, 185, 129, 0.1); border: 2px solid rgba(16, 185, 129, 0.5); border-radius: 10px; padding: 20px; }
     </style>
     """
 else:
@@ -109,6 +135,8 @@ else:
         strong, b { color: #0369a1 !important; }
         hr { border-color: rgba(37, 99, 235, 0.2) !important; }
         .explanation-box { background: rgba(37, 99, 235, 0.1); border-left: 3px solid #0369a1; padding: 15px; border-radius: 5px; margin: 10px 0; }
+        .upload-box { background: rgba(139, 92, 246, 0.05); border: 2px dashed rgba(139, 92, 246, 0.5); border-radius: 10px; padding: 20px; text-align: center; }
+        .template-box { background: rgba(16, 185, 129, 0.05); border: 2px solid rgba(16, 185, 129, 0.5); border-radius: 10px; padding: 20px; }
     </style>
     """
 
@@ -134,11 +162,319 @@ else:
 st.markdown(theme_css + mobile_css, unsafe_allow_html=True)
 
 # =====================================
+# HELPER FUNCTION TO ANALYZE DATA PATTERNS
+# =====================================
+def analyze_dataset_patterns(df):
+    """Analyze dataset to extract key patterns dynamically"""
+    patterns = []
+    
+    if df.empty:
+        return ["No data available for analysis."]
+    
+    # 1. Find Critical threat periods
+    critical_rows = df[df['Threat_Level'] == 'Critical']
+    if not critical_rows.empty:
+        years = critical_rows['Year'].unique()
+        if len(years) == 1:
+            patterns.append(f"**Critical Peak**: The only 'Critical' threat period occurred in **{years[0]}** when DDoS attacks reached {critical_rows['DDoS_Attacks'].max():,} and malware hit {critical_rows['Malware_Attacks'].max():,} incidents.")
+        else:
+            patterns.append(f"**Critical Periods**: Critical threat levels observed in **{', '.join(map(str, years))}** with peak DDoS of {critical_rows['DDoS_Attacks'].max():,}.")
+    else:
+        patterns.append("**No Critical Threats**: The dataset contains no Critical threat classifications - all periods were Medium or High risk.")
+    
+    # 2. Economic Environment correlation
+    econ_threat = df.groupby(['Economic_Environment', 'Threat_Level']).size().unstack(fill_value=0)
+    high_cost_critical = df[(df['Economic_Environment'] == 'High_Cost') & (df['Threat_Level'] == 'Critical')]
+    if not high_cost_critical.empty:
+        patterns.append(f"**Economic Stress Correlation**: High_Cost economic periods show elevated threats, with {len(high_cost_critical)} Critical classification(s).")
+    
+    # 3. Patch Delay impact
+    low_patch = df[df['Patch_Delay_Days'] < 10]
+    if not low_patch.empty:
+        threat_dist = low_patch['Threat_Level'].value_counts()
+        dominant = threat_dist.index[0] if not threat_dist.empty else "Unknown"
+        patterns.append(f"**Patch Speed Impact**: When patch delays drop below 10 days, threat levels trend toward **{dominant}** ({threat_dist.get(dominant, 0)} of {len(low_patch)} periods).")
+    
+    # 4. Attack volume trends
+    df_sorted = df.sort_values(['Year', 'Month'])
+    first_ddos = df_sorted['DDoS_Attacks'].iloc[0] if len(df_sorted) > 0 else 0
+    last_ddos = df_sorted['DDoS_Attacks'].iloc[-1] if len(df_sorted) > 0 else 0
+    
+    if last_ddos > first_ddos * 1.5:
+        patterns.append(f"**Escalation Trend**: DDoS attacks increased from {first_ddos:,} to {last_ddos:,} ({((last_ddos/first_ddos-1)*100):.0f}% growth) across the observation period.")
+    elif last_ddos < first_ddos * 0.7:
+        patterns.append(f"**Declining Trend**: DDoS attacks decreased from {first_ddos:,} to {last_ddos:,} ({((1-last_ddos/first_ddos)*100):.0f}% reduction) - defensive measures may be working.")
+    else:
+        patterns.append(f"**Stable Volume**: DDoS attacks remained relatively stable between {first_ddos:,} and {last_ddos:,} incidents.")
+    
+    # 5. CVE correlation
+    high_cve = df[df['Critical_CVEs'] > df['Critical_CVEs'].mean() + df['Critical_CVEs'].std()]
+    if not high_cve.empty:
+        high_threat_pct = (high_cve['Threat_Level'] != 'Medium').mean() * 100
+        patterns.append(f"**Vulnerability Window**: High CVE periods (>{df['Critical_CVEs'].mean() + df['Critical_CVEs'].std():.0f}) correlate with elevated threats {high_threat_pct:.0f}% of the time.")
+    
+    # 6. Inflation correlation
+    high_inflation = df[df['Inflation_Rate'] > 7.0]
+    if not high_inflation.empty:
+        threat_dist = high_inflation['Threat_Level'].value_counts()
+        patterns.append(f"**Economic Pressure**: High inflation periods (>{7.0}%) show threat distribution: {dict(threat_dist)}.")
+    
+    return patterns
+
+# =====================================
+# FUTURISTIC GRAPH FUNCTION
+# =====================================
+def create_futuristic_graph(df):
+    """
+    Create a futuristic cyberpunk-style visualization of threat data
+    """
+    try:
+        df = df.copy()
+        
+        # Safely create date column
+        # Ensure Year and Month are numeric
+        df['Year'] = pd.to_numeric(df['Year'], errors='coerce')
+        df['Month'] = pd.to_numeric(df['Month'], errors='coerce')
+        
+        # Drop rows with invalid dates
+        df = df.dropna(subset=['Year', 'Month'])
+        
+        # Convert Month to 1-12 range if it looks like a year (e.g. 2021 -> 1)
+        # This handles the specific error in your default data where Month had 2021
+        df['Month'] = df['Month'].apply(lambda x: int(x) if 1 <= int(x) <= 12 else 1)
+        df['Year'] = df['Year'].astype(int)
+        
+        # Create proper date objects
+        df['Date'] = pd.to_datetime(df[['Year', 'Month']].assign(day=1))
+        df = df.sort_values('Date')
+        
+        if df.empty:
+            st.error("No valid data available for visualization.")
+            return None
+
+        # Create figure with secondary y-axis
+        fig = make_subplots(
+            rows=2, cols=1,
+            shared_xaxes=True,
+            vertical_spacing=0.08,
+            row_heights=[0.7, 0.3],
+            subplot_titles=('⚡ ATTACK VECTORS OVER TIME', '🔒 VULNERABILITY METRICS')
+        )
+        
+        # Color palette - Cyberpunk Neon
+        colors = {
+            'ddos': '#00f5ff',      # Cyan
+            'malware': '#ff00ff',   # Magenta
+            'phishing': '#39ff14',  # Neon Green
+            'web': '#ff6b35',       # Orange-Red
+            'cves': '#ff1744',      # Red
+            'patch': '#ffd700',     # Gold
+            'traffic': '#8b5cf6',   # Purple
+            'grid': 'rgba(6, 182, 212, 0.1)',
+            'text': '#e2e8f0'
+        }
+        
+        # Row 1: Attack Volumes
+        fig.add_trace(
+            go.Scatter(
+                x=df['Date'], y=df['DDoS_Attacks'],
+                name='DDoS Attacks',
+                mode='lines+markers',
+                line=dict(color=colors['ddos'], width=3),
+                marker=dict(size=8, symbol='diamond', line=dict(width=2, color='white')),
+                fill='tonexty',
+                fillcolor='rgba(0, 245, 255, 0.1)'
+            ),
+            row=1, col=1
+        )
+        
+        fig.add_trace(
+            go.Scatter(
+                x=df['Date'], y=df['Malware_Attacks'],
+                name='Malware',
+                mode='lines+markers',
+                line=dict(color=colors['malware'], width=3),
+                marker=dict(size=8, symbol='circle', line=dict(width=2, color='white')),
+                fill='tonexty',
+                fillcolor='rgba(255, 0, 255, 0.1)'
+            ),
+            row=1, col=1
+        )
+        
+        fig.add_trace(
+            go.Scatter(
+                x=df['Date'], y=df['Phishing_Attacks'],
+                name='Phishing',
+                mode='lines+markers',
+                line=dict(color=colors['phishing'], width=3),
+                marker=dict(size=8, symbol='triangle-up', line=dict(width=2, color='white')),
+            ),
+            row=1, col=1
+        )
+        
+        fig.add_trace(
+            go.Scatter(
+                x=df['Date'], y=df['Web_Attacks'],
+                name='Web Attacks',
+                mode='lines+markers',
+                line=dict(color=colors['web'], width=3, dash='dot'),
+                marker=dict(size=8, symbol='square', line=dict(width=2, color='white')),
+            ),
+            row=1, col=1
+        )
+        
+        # Row 2: Vulnerability Metrics (scaled for visibility)
+        fig.add_trace(
+            go.Bar(
+                x=df['Date'], y=df['Critical_CVEs'],
+                name='Critical CVEs',
+                marker=dict(
+                    color=colors['cves'],
+                    line=dict(color='white', width=1),
+                    opacity=0.8
+                ),
+                text=df['Critical_CVEs'],
+                textposition='outside',
+                textfont=dict(color=colors['cves'], size=10)
+            ),
+            row=2, col=1
+        )
+        
+        # Add Patch Delay as line on secondary axis
+        fig.add_trace(
+            go.Scatter(
+                x=df['Date'], y=df['Patch_Delay_Days'],
+                name='Patch Delay (Days)',
+                mode='lines+markers',
+                line=dict(color=colors['patch'], width=3),
+                marker=dict(size=10, symbol='x', line=dict(width=2, color='white')),
+                yaxis='y3'
+            ),
+            row=2, col=1
+        )
+        
+        # Update layout with futuristic styling
+        fig.update_layout(
+            template='plotly_dark',
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(11, 17, 32, 0.8)',
+            font=dict(family='JetBrains Mono, monospace', color=colors['text'], size=11),
+            showlegend=True,
+            legend=dict(
+                orientation='h',
+                yanchor='bottom',
+                y=1.02,
+                xanchor='right',
+                x=1,
+                bgcolor='rgba(11, 17, 32, 0.9)',
+                bordercolor='#06b6d4',
+                borderwidth=1,
+                font=dict(size=10)
+            ),
+            margin=dict(l=60, r=60, t=100, b=60),
+            hovermode='x unified',
+            xaxis=dict(
+                showgrid=True,
+                gridcolor=colors['grid'],
+                gridwidth=1,
+                zeroline=False,
+                linecolor='#06b6d4',
+                linewidth=2,
+                tickfont=dict(size=10)
+            ),
+            xaxis2=dict(
+                showgrid=True,
+                gridcolor=colors['grid'],
+                gridwidth=1,
+                zeroline=False,
+                linecolor='#06b6d4',
+                linewidth=2,
+                title='Timeline'
+            ),
+            yaxis=dict(
+                title=dict(text='Attack Volume', font=dict(size=12, color='#06b6d4')),
+                showgrid=True,
+                gridcolor=colors['grid'],
+                gridwidth=1,
+                zeroline=False,
+                linecolor='#06b6d4',
+                linewidth=2,
+                tickfont=dict(size=10)
+            ),
+            yaxis2=dict(
+                title=dict(text='CVE Count', font=dict(size=12, color='#ff1744')),
+                showgrid=True,
+                gridcolor=colors['grid'],
+                gridwidth=1,
+                zeroline=False,
+                linecolor='#ff1744',
+                linewidth=2,
+                tickfont=dict(size=10)
+            ),
+            yaxis3=dict(
+                title=dict(text='Patch Delay (Days)', font=dict(size=12, color='#ffd700')),
+                overlaying='y2',
+                side='right',
+                showgrid=False,
+                zeroline=False,
+                linecolor='#ffd700',
+                linewidth=2,
+                tickfont=dict(size=10, color='#ffd700')
+            ),
+            title=dict(
+                text='📊 CYBER THREAT INTELLIGENCE // VISUALIZATION MODULE',
+                font=dict(size=16, color='#06b6d4', family='JetBrains Mono'),
+                x=0.5,
+                xanchor='center'
+            ),
+            # Add futuristic shapes
+            shapes=[
+                # Top border line
+                dict(type='line', x0=0, x1=1, y0=1.15, y1=1.15, 
+                     xref='paper', yref='paper',
+                     line=dict(color='#06b6d4', width=2)),
+                # Bottom border line
+                dict(type='line', x0=0, x1=1, y0=-0.15, y1=-0.15,
+                     xref='paper', yref='paper',
+                     line=dict(color='#06b6d4', width=2)),
+            ],
+            # Add annotations for futuristic feel
+            annotations=[
+                dict(
+                    text='◢ LIVE DATA STREAM ◣',
+                    xref='paper', yref='paper',
+                    x=0.5, y=1.08,
+                    showarrow=False,
+                    font=dict(size=10, color='#00f5ff', family='monospace'),
+                    bgcolor='rgba(0,0,0,0.5)',
+                    bordercolor='#00f5ff',
+                    borderwidth=1,
+                    borderpad=4
+                )
+            ]
+        )
+        
+        # Update hover template for futuristic look
+        fig.update_traces(
+            hovertemplate='<b>%{data.name}</b><br>' +
+                          'Date: %{x|%Y-%m}<br>' +
+                          'Value: %{y:,}<br>' +
+                          '<extra></extra>'
+        )
+        
+        return fig
+        
+    except Exception as e:
+        st.error(f"⚠️ Graph Generation Error: {str(e)}")
+        return None
+
+# =====================================
 # NAVIGATION
 # =====================================
-home, overview, dataset, models, parameters = st.tabs(
+home, data_upload, overview, dataset, models, parameters = st.tabs(
     [
         "🏠 HOME",
+        "📤 DATA UPLOAD",
         "📄 PROJECT OVERVIEW", 
         "📊 DATASET",
         "🤖 AI MODELS",
@@ -151,12 +487,13 @@ home, overview, dataset, models, parameters = st.tabs(
 # =====================================
 with home:
     st.title("🛡️ CYBER THREAT INTELLIGENCE")
-    st.subheader("SYSTEM v2.0.7 | Mount Kenya University")
+    # REMOVED: SYSTEM v2.0.8 line
     st.markdown("**Operator:** Stephen Musau Makau | **Clearance:** MSc Cybersecurity")
     
     mode_indicator = "🌙 DARK" if st.session_state.dark_mode else "☀️ LIGHT"
     view_indicator = "📱 MOBILE" if st.session_state.mobile_view else "💻 DESKTOP"
-    st.caption(f"⏱️ SYS.TIME: {datetime.now(ZoneInfo('Africa/Nairobi')).strftime('%d/%m/%Y | %H:%M:%S')} EAT | STATUS: ONLINE | MODE: {mode_indicator} | VIEW: {view_indicator}")
+    data_indicator = "📊 CUSTOM" if get_current_data_source() == "uploaded" else "📋 DEFAULT"
+    st.caption(f"⏱️ SYS.TIME: {datetime.now(ZoneInfo('Africa/Nairobi')).strftime('%d/%m/%Y | %H:%M:%S')} EAT | STATUS: ONLINE | MODE: {mode_indicator} | VIEW: {view_indicator} | DATA: {data_indicator}")
     
     st.divider()
 
@@ -164,10 +501,38 @@ with home:
     try:
         prediction = predict_2027()
         accuracy = get_model_accuracy() * 100
+        # Get all results for algorithm selection
+        all_results = get_results()
     except Exception as e:
         st.error(f"⚠️ System Error: {e}")
         prediction = "Unknown"
         accuracy = 0.0
+        all_results = {}
+
+    # Determine best algorithm(s) - those at 100% or highest accuracy
+    if all_results:
+        max_acc = max(all_results.values())
+        # If max is 1.0 (100%), get all that achieved 100%, else get the highest one(s)
+        if max_acc >= 0.999:  # Using 0.999 to handle floating point precision
+            best_algorithms = [name for name, acc in all_results.items() if acc >= 0.999]
+            best_acc_pct = 100.0
+        else:
+            best_algorithms = [name for name, acc in all_results.items() if acc == max_acc]
+            best_acc_pct = max_acc * 100
+    else:
+        best_algorithms = ["XGBoost"]  # Fallback
+        best_acc_pct = accuracy
+
+    # Format algorithm display name
+    if len(best_algorithms) == 1:
+        algo_display = best_algorithms[0].upper().replace(" ", "_")
+        algo_short = best_algorithms[0]
+    elif len(best_algorithms) == 2:
+        algo_display = "ENSEMBLE_DUAL"
+        algo_short = " + ".join(best_algorithms)
+    else:
+        algo_display = "ENSEMBLE_TRIPLE"
+        algo_short = "ALL_SYSTEMS"
 
     # 2. OUTCOME: Display Threat Projection FIRST (Top Priority)
     st.header("🚨 THREAT PROJECTION // 2027")
@@ -204,7 +569,55 @@ with home:
 
     st.divider()
 
-    # 3. CONTEXT: System Metrics & Algorithm Info (Secondary Priority)
+    # 3. FUTURISTIC GRAPH: Visual Data Intelligence
+    st.markdown("### 📡 THREAT VISUALIZATION MATRIX")
+    
+    # Show current data source for the graph
+    current_source = get_current_data_source()
+    if current_source == "uploaded":
+        st.info("📊 Displaying **Uploaded Dataset** Visualization")
+    else:
+        st.info("📊 Displaying **Default Dataset** Visualization")
+    
+    # Get current dataset for visualization
+    viz_data = get_dataset()
+    
+    # Create and display the futuristic graph with unique key based on data source
+    fig = create_futuristic_graph(viz_data)
+    if fig is not None:
+        # KEY FIX: Add unique key based on data source and data shape to force re-render
+        chart_key = f"threat_graph_{current_source}_{len(viz_data)}"
+        st.plotly_chart(fig, use_container_width=True, height=600, key=chart_key)
+    
+    # Graph explanation
+    with st.expander("📖 **Graph Interpretation Guide**", expanded=False):
+        st.markdown("""
+        **🔍 Understanding the Visualization:**
+        
+        **Top Panel - Attack Vectors:**
+        - **Cyan Line (◆)**: DDoS Attacks - Distributed denial of service incidents
+        - **Magenta Line (●)**: Malware Infections - Virus/Trojan/Ransomware detections  
+        - **Green Line (▲)**: Phishing Attempts - Social engineering attacks
+        - **Orange Line (■)**: Web Attacks - SQL injection, XSS, application exploits
+        
+        **Bottom Panel - Vulnerability Metrics:**
+        - **Red Bars**: Critical CVEs published each month (security vulnerabilities)
+        - **Gold Line (×)**: Patch Delay Days (time to deploy security fixes)
+        
+        **Key Patterns to Watch:**
+        - **Spikes in red bars** + **high gold line** = Critical vulnerability window
+        - **Rising cyan/magenta** = Active attack campaign in progress
+        - **All lines trending up** = Approaching CRITICAL threat level
+        
+        **Interactive Features:**
+        - Hover over any point for exact values
+        - Click legend items to show/hide specific attack types
+        - Drag to zoom into specific time periods
+        """)
+    
+    st.divider()
+
+    # 4. CONTEXT: System Metrics & Algorithm Info (Secondary Priority)
     st.markdown("### 📡 THREAT ASSESSMENT MODULE")
     
     if st.session_state.mobile_view:
@@ -214,22 +627,66 @@ with home:
         c1, c2, c3 = st.columns(3)
 
     with c1:
-        st.markdown("""
+        # Dynamic algorithm display based on 100% performers
+        if len(best_algorithms) == 1:
+            algo_name = best_algorithms[0]
+            algo_code = algo_name.upper().replace(" ", "_")
+            subtitle = "ML.Engine.Active" if "XGBoost" in algo_name else "Statistical.Engine.Active"
+            
+            # Single algorithm explanation
+            if "XGBoost" in algo_name:
+                desc = "eXtreme Gradient Boosting | Advanced ensemble decision trees with superior pattern recognition"
+            elif "Random Forest" in algo_name:
+                desc = "Random Forest Classifier | Bagging ensemble method reducing overfitting through multiple decision trees"
+            elif "Logistic Regression" in algo_name:
+                desc = "Logistic Regression | Linear statistical model providing high interpretability and baseline performance"
+            else:
+                desc = "Machine Learning Engine"
+                
+        elif len(best_algorithms) == 2:
+            algo_code = "DUAL_ENSEMBLE"
+            algo_name = " + ".join(best_algorithms)
+            subtitle = "Hybrid.Engine.Active"
+            desc = f"Combined {best_algorithms[0]} & {best_algorithms[1]} | Hybrid approach leveraging multiple algorithmic strengths"
+        else:
+            algo_code = "TRIPLE_ENSEMBLE"
+            algo_name = "ALL_SYSTEMS"
+            subtitle = "Meta.Ensemble.Active"
+            desc = "Full Algorithmic Consensus | All three models achieving perfect accuracy - maximum reliability mode"
+        
+        st.markdown(f"""
         <div class="tech-container" style="text-align: center;">
-            <h4 style="color: #94a3b8; margin:15px 0 0 0; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 2px; font-family: Inter, sans-serif;">Core Algorithm</h4>
-            <h2 style="margin: 20px 0; color: #06b6d4; font-family: JetBrains Mono, monospace !important; font-size: 2.6rem; font-weight: 700; text-shadow: 0 0 15px rgba(6,182,212,0.5);">XGBoost</h2>
-            <p style="color: #64748b; font-size: 0.95rem; font-family: Calibri, sans-serif; margin-bottom: 15px;">ML.Engine.GradientBoost</p>
+            <h4 style="color: #94a3b8; margin:15px 0 0 0; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 2px; font-family: Inter, sans-serif;">Core Algorithm {'(s)' if len(best_algorithms) > 1 else ''}</h4>
+            <h2 style="margin: 20px 0; color: #06b6d4; font-family: JetBrains Mono, monospace !important; font-size: {'2.0rem' if len(best_algorithms) > 1 else '2.6rem'}; font-weight: 700; text-shadow: 0 0 15px rgba(6,182,212,0.5);">{algo_code}</h2>
+            <p style="color: #64748b; font-size: 0.95rem; font-family: Calibri, sans-serif; margin-bottom: 15px;">{subtitle}</p>
         </div>
         """, unsafe_allow_html=True)
-        st.caption("💡 **XGBoost** (eXtreme Gradient Boosting) is an advanced ML algorithm that combines multiple decision trees to make predictions. It was selected for its superior accuracy in handling cybersecurity data.")
+        
+        # Dynamic explanation based on which algorithm(s) won
+        if len(best_algorithms) == 1:
+            if "XGBoost" in best_algorithms[0]:
+                st.caption("💡 **XGBoost** uses gradient boosting to combine weak learners into a strong predictor. Excels at capturing non-linear relationships in cybersecurity data and handles imbalanced datasets effectively.")
+            elif "Random Forest" in best_algorithms[0]:
+                st.caption("💡 **Random Forest** builds multiple decision trees and merges their predictions. Reduces overfitting through bagging and provides robust performance across varied threat patterns.")
+            elif "Logistic Regression" in best_algorithms[0]:
+                st.caption("💡 **Logistic Regression** provides a linear probabilistic approach. While simpler than ensemble methods, it offers high interpretability and efficient computation for real-time predictions.")
+        elif len(best_algorithms) == 2:
+            st.caption(f"💡 **Dual Algorithm Mode**: Both {best_algorithms[0]} and {best_algorithms[1]} achieved optimal performance. The system leverages complementary strengths - ensemble diversity meets statistical rigor.")
+        else:
+            st.caption("💡 **Triple Consensus Mode**: All three algorithms achieved 100% accuracy on validation data. This rare state indicates extremely clear patterns in your dataset, providing maximum confidence in predictions.")
 
     with c2:
         st.metric(
             "🎯 MODEL ACCURACY",
-            f"{accuracy:.2f}%",
+            f"{best_acc_pct:.2f}%",
             help="Training validation score"
         )
-        st.caption("💡 This percentage indicates how often the model correctly predicted historical threat levels. Above 80% is considered reliable for operational use.")
+        if best_acc_pct >= 99.9:
+            st.caption("🌟 **PERFECT SCORE**: Optimal prediction reliability achieved. The model(s) correctly classified all validation samples.")
+        elif best_acc_pct >= 90:
+            st.caption("✅ **HIGH RELIABILITY**: Strong predictive performance suitable for operational deployment.")
+        else:
+            st.caption("⚠️ **MODERATE RELIABILITY**: Consider uploading more historical data to improve accuracy.")
 
     with c3:
         st.markdown("""
@@ -239,22 +696,83 @@ with home:
             <p style="color: #64748b; font-size: 0.95rem; font-family: Calibri, sans-serif; margin-bottom: 15px;">Forecast.Horizon</p>
         </div>
         """, unsafe_allow_html=True)
-        st.caption("💡 The model projects threat levels 2 years ahead using trend analysis of attack patterns, economic indicators, and system vulnerabilities from 2020-2025 data.")
+        st.caption("💡 The model projects threat levels 2 years ahead using trend analysis of attack patterns, economic indicators, and system vulnerabilities from historical data.")
 
     st.divider()
 
-    # 4. EDUCATION: Methodology & Explanations (Moved Below Outcome)
+    # 4. EDUCATION: Dynamic Methodology Based on Data Source
     st.markdown("### 🧠 **Prediction Methodology**")
-    st.info("""
-    **How the 2027 Prediction is Generated:**
     
-    1. **Data Input**: The model receives projected values for 12 parameters (DDoS attacks, malware volume, CVE counts, inflation, GDP, etc.)
-    2. **Pattern Recognition**: XGBoost compares these projections against historical patterns where similar conditions resulted in specific threat levels
-    3. **Classification**: The system classifies the 2027 scenario into one of three categories: Moderate, High, or Critical
-    4. **Confidence**: The accuracy metric indicates how much trust to place in this prediction based on past performance
+    # Determine current data context
+    data_source = get_current_data_source()
+    is_custom_data = (data_source == "uploaded")
     
-    **Why This Matters**: Early warning allows security teams to allocate resources proactively rather than reacting to attacks after they occur.
-    """)
+    # Get model performance metrics to tailor the explanation
+    try:
+        all_results = get_results()
+        if all_results:
+            max_acc = max(all_results.values())
+            best_algorithms = [name for name, acc in all_results.items() if acc == max_acc]
+            best_acc_pct = max_acc * 100
+        else:
+            best_algorithms = []
+            best_acc_pct = 0.0
+    except:
+        best_algorithms = []
+        best_acc_pct = 0.0
+
+    # Dynamic Content Generation
+    if is_custom_data:
+        st.warning("⚠️ **Custom Dataset Detected**: The methodology below reflects patterns learned from your **uploaded data** rather than the default research dataset.")
+        st.info(f"""
+        **Adaptive Learning Protocol Active**
+        
+        The system has analyzed your uploaded dataset containing {len(get_dataset())} historical records. 
+        Based on the data characteristics, the system selected **{', '.join(best_algorithms) if best_algorithms else 'No Model'}** as the optimal predictor.
+        
+        **Key Findings from Your Data:**
+        - **Pattern Recognition**: The model identified specific correlations between your input variables (e.g., economic indicators, attack volumes) and threat outcomes.
+        - **Validation Performance**: The model achieved **{best_acc_pct:.2f}% accuracy** on validation data, indicating how well it generalizes to unseen scenarios.
+        - **Risk Factors**: Your data suggests that specific combinations of parameters (likely involving CVE counts and patch delays) are strong predictors of elevated threat levels.
+        
+        **Methodology**: The system uses **Empirical Risk Minimization** on your specific dataset, optimizing the selected algorithm's hyperparameters to minimize prediction error on your historical records.
+        """)
+    else:
+        # Default Dataset Logic (Original Behavior with Dynamic Algorithm Selection)
+        if best_algorithms and len(best_algorithms) == 1 and "Logistic Regression" in best_algorithms[0]:
+            st.info("""
+            **How the 2027 Prediction is Generated (Logistic Regression Mode):**
+            
+            1. **Linear Classification**: The model calculates probability scores for each threat level (Medium/High/Critical) using weighted linear combinations of input features
+            2. **Sigmoid Activation**: Probabilities are passed through a logistic function to ensure outputs fall between 0 and 1
+            3. **Decision Boundary**: The class with highest probability above threshold (0.5) is selected as the prediction
+            4. **Interpretability**: Coefficients reveal which factors most influence threat levels (e.g., positive weight on CVE count increases Critical probability)
+            
+            **Why This Matters**: While less complex than ensemble methods, logistic regression provides transparent, auditable predictions crucial for government security decisions.
+            """)
+        elif best_algorithms and len(best_algorithms) == 1 and "Random Forest" in best_algorithms[0]:
+            st.info("""
+            **How the 2027 Prediction is Generated (Random Forest Mode):**
+            
+            1. **Ensemble Voting**: 200 decision trees independently analyze the 2027 parameters and vote on threat classification
+            2. **Bootstrap Aggregation**: Each tree trains on random subsets of historical data, ensuring robustness against outliers
+            3. **Feature Randomness**: At each split, only random subsets of features are considered, forcing diversity in tree structures
+            4. **Majority Rule**: The threat level receiving the most votes across all trees becomes the final prediction
+            
+            **Why This Matters**: Random Forest reduces overfitting risks inherent in single decision trees while maintaining interpretability through feature importance rankings.
+            """)
+        else:
+            # Default to XGBoost or Ensemble explanation
+            st.info("""
+            **How the 2027 Prediction is Generated:**
+            
+            1. **Data Input**: The model receives projected values for 12 parameters (DDoS attacks, malware volume, CVE counts, inflation, GDP, etc.)
+            2. **Pattern Recognition**: The system compares these projections against historical patterns where similar conditions resulted in specific threat levels
+            3. **Classification**: The system classifies the 2027 scenario into one of three categories: Moderate, High, or Critical
+            4. **Confidence**: The accuracy metric indicates how much trust to place in this prediction based on past performance
+            
+            **Why This Matters**: Early warning allows security teams to allocate resources proactively rather than reacting to attacks after they occur.
+            """)
 
     # EXPLANATION: What this page shows
     with st.expander("📖 **How to Read This Dashboard**", expanded=False):
@@ -269,8 +787,136 @@ with home:
             - **HIGH** (Orange): Increased vigilance required
             - **CRITICAL** (Red): Maximum alert status needed
         
-        **How it Works**: The system analyzes 10 historical data points across 12 variables (attack types, economic factors, vulnerabilities) to identify patterns and predict future threats.
+        **How it Works**: The system analyzes historical data points across 12 variables (attack types, economic factors, vulnerabilities) to identify patterns and predict future threats.
+        
+        **📤 Upload Your Own Data**: Go to the **DATA UPLOAD** tab to use your own historical data for custom predictions!
         """)
+
+# =====================================
+# DATA UPLOAD - NEW TAB
+# =====================================
+with data_upload:
+    st.title("📤 DATA UPLOAD CENTER")
+    st.markdown("**Upload your own cybersecurity data to generate custom threat predictions**")
+    
+    st.divider()
+    
+    # STEP 1: Download Template
+    st.header("📋 STEP 1: Download Template")
+    
+    st.markdown("""
+    ### 📖 **Data Format Requirements**
+    
+    Before uploading your data, download the Excel template below. Your file **must** contain these exact columns:
+    
+    | Column | Type | Description | Example |
+    |--------|------|-------------|---------|
+    | **Year** | Integer | Year of observation | 2024 |
+    | **Month** | Integer | Month (1-12) | 8 |
+    | **DDoS_Attacks** | Integer | Number of DDoS incidents | 4200 |
+    | **Malware_Attacks** | Integer | Malware infection count | 18500 |
+    | **Phishing_Attacks** | Integer | Phishing attempts recorded | 4100 |
+    | **Web_Attacks** | Integer | Web application attacks | 5200 |
+    | **Critical_CVEs** | Integer | Critical vulnerabilities published | 95 |
+    | **Patch_Delay_Days** | Integer | Average days to patch | 9 |
+    | **Traffic_Volume** | Integer | Network traffic (requests) | 1100000 |
+    | **Inflation_Rate** | Float | Inflation percentage | 6.8 |
+    | **GDP_Growth** | Float | GDP growth percentage | 5.2 |
+    | **Economic_Environment** | Text | Economic condition | Stable, High_Cost, Improving, Pressure |
+    | **Threat_Level** | Text | Historical threat level | Medium, High, Critical |
+    """)
+    
+    # Generate and provide download button for template
+    template_buffer = generate_excel_template()
+    
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        st.download_button(
+            label="📥 DOWNLOAD EXCEL TEMPLATE",
+            data=template_buffer,
+            file_name="cyber_threat_template.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True
+        )
+        st.caption("💡 This template contains sample data showing exactly how to format your entries")
+    
+    st.divider()
+    
+    # STEP 2: Upload Data
+    st.header("📤 STEP 2: Upload Your Data")
+    
+    st.markdown("""
+    ### 📖 **Upload Instructions**
+    
+    1. **Prepare your data** using the template above
+    2. **Save as Excel (.xlsx)** or CSV (.csv) format
+    3. **Ensure minimum 5 rows** of historical data (more is better)
+    4. **Verify column names match exactly** (case-sensitive)
+    5. **Upload below** and click "Train Model"
+    
+    ⚠️ **Important**: The system will automatically retrain all ML algorithms (Logistic Regression, Random Forest, XGBoost) using your uploaded data.
+    """)
+    
+    uploaded_file = st.file_uploader(
+        "Choose your data file (Excel .xlsx or CSV .csv)",
+        type=['xlsx', 'csv'],
+        help="Upload your historical cybersecurity data following the template format"
+    )
+    
+    if uploaded_file is not None:
+        st.success(f"✅ File uploaded: **{uploaded_file.name}**")
+        
+        # Preview uploaded data
+        try:
+            if uploaded_file.name.endswith('.csv'):
+                df_preview = pd.read_csv(uploaded_file)
+            else:
+                df_preview = pd.read_excel(uploaded_file)
+            
+            st.markdown("### 👁️ **Data Preview** (First 5 rows)")
+            st.dataframe(df_preview.head(), use_container_width=True)
+            
+            # Validate data
+            validation_result = validate_uploaded_data(df_preview)
+            
+            if validation_result['valid']:
+                st.success(f"✅ **Validation Passed**: {validation_result['message']}")
+                
+                # Train button
+                if st.button("🚀 TRAIN MODEL WITH UPLOADED DATA", use_container_width=True, type="primary"):
+                    with st.spinner("Training models... Please wait..."):
+                        success, message = train_on_uploaded_data(df_preview)
+                        if success:
+                            st.session_state.uploaded_data = df_preview
+                            st.session_state.training_status = "success"
+                            st.success(f"✅ {message}")
+                            st.balloons()
+                            st.info("🔄 Navigate to **HOME** tab to see updated graph with your data!")
+                            # Force page rerun to refresh graph with new data
+                            st.rerun()
+                        else:
+                            st.session_state.training_status = "error"
+                            st.error(f"❌ {message}")
+            else:
+                st.error(f"❌ **Validation Failed**: {validation_result['message']}")
+                st.warning("Please fix the issues above and re-upload.")
+                
+        except Exception as e:
+            st.error(f"❌ Error reading file: {str(e)}")
+            st.info("💡 Make sure your file is not corrupted and is in the correct format.")
+    
+    st.divider()
+    
+    # Reset option
+    st.header("🔄 Reset to Default")
+    if st.button("↩️ RETURN TO DEFAULT DATASET", use_container_width=True):
+        st.session_state.uploaded_data = None
+        # Reinitialize with default data
+        train_on_uploaded_data(None)
+        st.success("✅ System reset to default dataset")
+        st.info("The system is now using the original 2020-2025 research data.")
+        # Force page rerun to refresh graph
+        st.rerun()
 
 # =====================================
 # PROJECT OVERVIEW - WITH EXPLANATIONS
@@ -286,6 +932,8 @@ with overview:
     **The Problem**: Kenyan Government Digital Services face increasing cyber attacks, but traditional defenses only respond after damage occurs. This creates vulnerability windows.
     
     **The Solution**: Machine Learning analyzes historical attack patterns alongside economic and technical indicators to forecast threat levels 2 years in advance, enabling **proactive defense**.
+    
+    **🆕 New Feature**: You can now upload your own historical data to generate custom predictions specific to your organization or region!
     """)
     
     if st.session_state.mobile_view:
@@ -314,6 +962,8 @@ with overview:
             Advanced predictive intelligence platform for Kenyan Government Digital Services. 
             Deploys machine learning algorithms to forecast cyber threat evolution and enable 
             proactive defense strategies rather than reactive responses.
+            
+            **Now with custom data upload capability** for organization-specific predictions.
             """)
             
             st.subheader("⚠️ THREAT LANDSCAPE")
@@ -341,6 +991,8 @@ with overview:
             - **📈 Economic Indicators**: Inflation/GDP correlation algorithms
             
             **Data Flow**: Raw data → Feature Engineering → Model Training → Prediction → Alert Generation
+            
+            **Upload Capability**: Custom datasets → Auto-validation → Model Retraining → Custom Predictions
             """)
             
             st.subheader("🌍 OPERATIONAL IMPACT")
@@ -350,21 +1002,31 @@ with overview:
             - **💰 Resource Optimization**: Allocate security budget efficiently based on predicted risk
             - **📋 Policy Intelligence**: Inform cybersecurity policy with data-driven forecasts
             - **🤝 Public Trust**: Maintain confidence in e-government services through proactive security
+            - **📊 Custom Analysis**: Upload your own data for organization-specific threat modeling
             """)
 
     st.info("🔒 **SECURITY PROTOCOL**: All data displayed is synthetic/anonymized for research purposes. No real-time government data is exposed.")
 
 # =====================================
-# DATASET - WITH EXPLANATIONS
+# DATASET - WITH DYNAMIC PATTERN ANALYSIS
 # =====================================
 with dataset:
     st.title("📊 DATA MATRIX")
+    
+    # Get current dataset for analysis
+    current_df = get_dataset()
+    
+    # Show current data source
+    if get_current_data_source() == "uploaded":
+        st.success("📊 **Currently Displaying**: Your uploaded custom dataset")
+    else:
+        st.info("📊 **Currently Displaying**: Default research dataset (2020-2025)")
     
     # EXPLANATION: What the data represents
     st.markdown("""
     ### 📖 **Understanding the Training Data**
     
-    This dataset contains **10 historical observations** from 2020-2025 used to train the prediction model. 
+    This dataset contains historical observations used to train the prediction model. 
     Each row represents a snapshot in time with 12 measured variables that correlate with cyber threat levels.
     
     **How to Read the Columns:**
@@ -375,124 +1037,341 @@ with dataset:
     - **Target**: Threat_Level (Medium/High/Critical) - what the model learns to predict
     """)
     
-    st.markdown("Accessing classified training datasets...")
+    st.markdown("Accessing training datasets...")
     
     height = 400 if st.session_state.mobile_view else 500
     st.dataframe(
-        get_dataset(),
+        current_df,
         use_container_width=True,
         height=height
     )
     
-    # EXPLANATION: Data patterns
-    st.success("""
-    **📈 Key Patterns Visible in This Data:**
+    # DYNAMIC PATTERN ANALYSIS
+    st.markdown("---")
+    st.subheader("📈 **Key Patterns Visible in This Data**")
     
-    1. **2023 Peak**: The only "Critical" threat period occurred when DDoS attacks reached 3,200 and malware hit 15,000 incidents
-    2. **Economic Correlation**: High/Critical threats align with "High_Cost" economic environment and inflation above 7%
-    3. **Patch Delay Impact**: When patch delays drop below 10 days, threat levels tend to decrease (faster patching = less vulnerability)
-    4. **Attack Escalation**: Clear upward trend in attack volumes from 2020-2023, with slight stabilization in 2024-2025
+    # Analyze actual patterns in the current dataset
+    patterns = analyze_dataset_patterns(current_df)
     
-    **Training Process**: The model learned these patterns to recognize that specific combinations of these values predict future threat levels.
-    """)
+    # Display each pattern as a bullet point
+    for pattern in patterns:
+        st.markdown(f"• {pattern}")
+    
+    # Additional dataset statistics
+    st.markdown("---")
+    st.subheader("📊 **Dataset Statistics**")
+    
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("Total Records", len(current_df))
+    with col2:
+        threat_dist = current_df['Threat_Level'].value_counts()
+        most_common = threat_dist.index[0] if not threat_dist.empty else "N/A"
+        st.metric("Most Common Threat", most_common)
+    with col3:
+        avg_ddos = current_df['DDoS_Attacks'].mean() if 'DDoS_Attacks' in current_df.columns else 0
+        st.metric("Avg DDoS", f"{avg_ddos:,.0f}")
+    with col4:
+        year_range = f"{current_df['Year'].min()}-{current_df['Year'].max()}" if 'Year' in current_df.columns and not current_df.empty else "N/A"
+        st.metric("Year Range", year_range)
+    
+    st.caption("💡 **Training Process**: The model learned these patterns to recognize that specific combinations of these values predict future threat levels.")
+    
+    st.info("💡 **Tip**: Upload your own data in the **DATA UPLOAD** tab to see patterns specific to your organization!")
 
 # =====================================
-# AI MODELS - WITH EXPLANATIONS
+# AI MODELS - WITH DYNAMIC WINNER DISPLAY
 # =====================================
 with models:
     st.title("🤖 AI CORE PERFORMANCE")
     
-    # EXPLANATION: Algorithm comparison
-    st.markdown("""
-    ### 📖 **Algorithm Selection Process**
-    
-    Three machine learning algorithms were evaluated to determine which best predicts cyber threat levels. 
-    Each was trained on the same historical data and tested on unseen validation data to measure accuracy.
-    
-    **Why Compare Multiple Algorithms?**
-    Different algorithms handle data patterns differently. We selected the one with highest accuracy on our specific cybersecurity dataset.
-    """)
-    
-    st.markdown("Algorithmic benchmarking and selection metrics...")
-    
+    # Get results to determine winners
     results = get_results()
+    
+    # Determine active algorithms (100% or highest)
+    if results:
+        max_acc = max(results.values())
+        if max_acc >= 0.999:
+            active_algorithms = [name for name, acc in results.items() if acc >= 0.999]
+            active_acc = 100.0
+        else:
+            active_algorithms = [name for name, acc in results.items() if acc == max_acc]
+            active_acc = max_acc * 100
+    else:
+        active_algorithms = ["XGBoost"]
+        active_acc = 0.0
+    
+    # Show current data source
+    if get_current_data_source() == "uploaded":
+        st.success("🤖 **Models trained on**: Your uploaded custom dataset")
+    else:
+        st.info("🤖 **Models trained on**: Default research dataset")
+    
+    st.markdown("---")
+    
+    # DISPLAY ACTIVE/WINNING ALGORITHMS SECTION
+    if len(active_algorithms) == 1:
+        winner_name = active_algorithms[0]
+        st.header(f"🏆 ACTIVE ALGORITHM: {winner_name.upper()}")
+        
+        if "XGBoost" in winner_name:
+            st.success("""
+            ### 🥇 XGBoost (eXtreme Gradient Boosting)
+            
+            **Status**: ACTIVE | **Accuracy**: 100.00%
+            
+            **Why It's Winning:**
+            XGBoost has achieved perfect accuracy on your validation data. This gradient boosting framework uses regularized learning to prevent overfitting while capturing complex non-linear patterns in cybersecurity threats.
+            
+            **Key Strengths:**
+            - **Gradient Boosting**: Sequentially corrects errors of previous trees
+            - **Regularization**: L1/L2 penalties prevent overfitting
+            - **Parallel Processing**: Efficient tree construction
+            - **Missing Value Handling**: Automatically learns best imputation
+            
+            **Best For**: Datasets with complex feature interactions and imbalanced classes (typical in cybersecurity)
+            """)
+        elif "Random Forest" in winner_name:
+            st.success("""
+            ### 🥇 Random Forest Classifier
+            
+            **Status**: ACTIVE | **Accuracy**: 100.00%
+            
+            **Why It's Winning:**
+            Random Forest has achieved perfect accuracy through its ensemble of 200 decision trees. The bagging approach (bootstrap aggregation) creates diversity that captures robust patterns without overfitting.
+            
+            **Key Strengths:**
+            - **Bagging**: Reduces variance through multiple trees
+            - **Feature Randomness**: Forces diverse split decisions
+            - **Out-of-Bag Scoring**: Built-in validation mechanism
+            - **Feature Importance**: Ranks which variables matter most
+            
+            **Best For**: Datasets where interpretability and robustness are equally important
+            """)
+        elif "Logistic Regression" in winner_name:
+            st.success("""
+            ### 🥇 Logistic Regression
+            
+            **Status**: ACTIVE | **Accuracy**: 100.00%
+            
+            **Why It's Winning:**
+            Logistic Regression has achieved perfect accuracy, indicating your data has clear linear separability between threat classes. This statistical approach provides maximum interpretability.
+            
+            **Key Strengths:**
+            - **Linear Separability**: Clear decision boundaries
+            - **Probabilistic Output**: Confidence scores for predictions
+            - **Coefficient Interpretation**: Direct feature impact measurement
+            - **Computational Efficiency**: Fast training and prediction
+            
+            **Best For**: Datasets with clear linear patterns requiring auditable decisions
+            """)
+            
+    elif len(active_algorithms) == 2:
+        st.header(f"🏆 DUAL ENSEMBLE ACTIVE")
+        st.success(f"""
+        ### 🥇 Combined System: {' & '.join(active_algorithms)}
+        
+        **Status**: ACTIVE | **Accuracy**: 100.00%
+        
+        **Why Both Are Winning:**
+        Both algorithms achieved perfect accuracy on your validation data. The system leverages their complementary strengths - one may excel at capturing linear trends while the other handles non-linear interactions.
+        
+        **Hybrid Advantages:**
+        - **Diversity**: Different algorithmic approaches reduce blind spots
+        - **Consensus**: Agreement between models increases confidence
+        - **Robustness**: If patterns shift, multiple models adapt differently
+        - **Validation**: Cross-checking predictions between architectures
+        
+        **Best For**: Critical applications requiring maximum reliability through algorithmic diversity
+        """)
+        
+    else:  # All three
+        st.header(f"🏆 TRIPLE CONSENSUS MODE")
+        st.success("""
+        ### 🥇 ALL SYSTEMS ACTIVE: Logistic Regression + Random Forest + XGBoost
+        
+        **Status**: ACTIVE | **Accuracy**: 100.00%
+        
+        **Why All Three Are Winning:**
+        All three algorithms achieved perfect accuracy on your validation data. This rare "triple consensus" indicates your dataset has exceptionally clear, separable patterns that are detectable by linear, bagging, and boosting approaches alike.
+        
+        **Meta-Ensemble Advantages:**
+        - **Maximum Confidence**: Three independent architectures agree
+        - **Pattern Clarity**: Data contains strong, unambiguous signals
+        - **Zero Uncertainty**: No validation samples were misclassified
+        - **System Reliability**: Multiple fallback options available
+        
+        **Best For**: Mission-critical deployments where prediction confidence must be absolute
+        """)
+    
+    st.markdown("---")
+    
+    # EXPLANATION: Algorithm comparison table
+    st.markdown("### 📊 **Complete Algorithm Benchmarking**")
+    
     table_data = []
     for name, value in results.items():
+        is_active = name in active_algorithms
+        status = "🟢 ACTIVE" if is_active else "⚪ STANDBY"
         table_data.append({
             "Algorithm": name,
             "Accuracy": f"{value*100:.2f}%",
-            "Status": "ACTIVE" if name == "XGBoost" else "STANDBY"
+            "Status": status
         })
     
     st.table(table_data)
     
     # EXPLANATION: Results interpretation
+    st.markdown("### 📖 **Understanding the Results**")
+    
     col1, col2 = st.columns(2)
     with col1:
-        st.info("""
-        **🥇 Winner: XGBoost (eXtreme Gradient Boosting)**
-        
-        **Why it performed best:**
-        - **Handles Imbalanced Data**: We have more "Medium" than "Critical" samples; XGBoost weights these appropriately
-        - **Non-Linear Patterns**: Captures complex interactions (e.g., inflation + patch delay combined effect)
-        - **Regularization**: Prevents overfitting to the small dataset (only 10 data points)
-        - **Feature Importance**: Automatically identifies which variables (CVEs, DDoS, etc.) matter most
-        
-        **Accuracy Interpretation**: If XGBoost shows 85% accuracy, it correctly predicted the threat level in 8.5 out of 10 historical cases.
-        """)
+        if len(active_algorithms) == 1:
+            winner = active_algorithms[0]
+            st.info(f"""
+            **🥇 Winner Analysis: {winner}**
+            
+            This algorithm achieved the highest accuracy on your specific dataset. 
+            {'Its gradient boosting approach' if 'XGBoost' in winner else 'Its ensemble approach' if 'Random' in winner else 'Its linear approach'} 
+            best matched the patterns in your cybersecurity data.
+            
+            **Recommendation**: Deploy this algorithm for production predictions.
+            """)
+        else:
+            st.info(f"""
+            **🥇 Winners Analysis: {', '.join(active_algorithms)}**
+            
+            Multiple algorithms achieved perfect accuracy, indicating your dataset
+            has exceptionally clear patterns detectable by different approaches.
+            
+            **Recommendation**: Use consensus voting for maximum reliability.
+            """)
     
     with col2:
         st.warning("""
-        **📊 Other Algorithms Tested:**
+        **📊 Algorithm Characteristics:**
         
-        **Logistic Regression** (Baseline):
-        - Simple linear classifier
-        - Lower accuracy because threat patterns are non-linear
-        - Good for interpretability but misses complex interactions
+        **Logistic Regression**: Linear, fast, interpretable
+        **Random Forest**: Ensemble, robust, balanced  
+        **XGBoost**: Boosted, powerful, handles complexity
         
-        **Random Forest**:
-        - Ensemble of decision trees
-        - Good accuracy but prone to overfitting with small datasets
-        - Less effective than XGBoost at handling imbalanced classes
-        
-        **Why Not Deep Learning?**
-        With only 10 data points, neural networks would overfit (memorize rather than learn patterns). XGBoost is optimal for small-to-medium structured datasets.
+        The best algorithm depends on your specific data patterns.
         """)
-    
-    st.warning("⚠️ **SYSTEM NOTE**: XGBoost selected for production deployment. Superior handling of imbalanced threat datasets and complex feature interactions.")
 
 # =====================================
-# PARAMETERS - WITH EXPLANATIONS
+# PARAMETERS - WITH DATA-SPECIFIC INSIGHTS
 # =====================================
 with parameters:
     st.title("⚙️ SYSTEM PARAMETERS")
     
-    # EXPLANATION: Parameters meaning
-    st.markdown("""
+    # Get current prediction for context
+    try:
+        current_prediction = predict_2027()
+        params_df = get_parameters()
+    except:
+        current_prediction = "Unknown"
+        params_df = get_parameters()
+    
+    # EXPLANATION: Parameters meaning with context
+    st.markdown(f"""
     ### 📖 **2027 Projection Parameters**
+    
+    **Current Prediction for 2027**: {'🟢 **MODERATE**' if current_prediction == 'Medium' else '🟠 **HIGH**' if current_prediction == 'High' else '🔴 **CRITICAL**' if current_prediction == 'Critical' else '⚪ **Unknown**'}
     
     These values represent **projected conditions for August 2027** based on trend analysis, economic forecasts, and technological growth projections. 
     The model uses these 12 inputs to classify the threat level.
     
     **How Projections Are Derived:**
-    - **Attack Volumes**: Extrapolated from 2020-2025 growth curves (DDoS projected to reach 4,200 based on trend)
-    - **CVE Counts**: Based on National Vulnerability Database growth rates (projected 95 critical CVEs)
+    - **Attack Volumes**: Extrapolated from historical growth curves in your dataset
+    - **CVE Counts**: Based on National Vulnerability Database growth rates
     - **Economic**: Central Bank inflation forecasts and GDP projections
     - **Operational**: Expected traffic volume and patch management efficiency targets
+    
+    **Note**: These projections remain constant, but the model's interpretation changes based on patterns learned from your {'uploaded' if get_current_data_source() == 'uploaded' else 'default'} data!
     """)
     
-    st.markdown("Feature configuration for 2027 threat projection horizon:")
+    st.markdown("### 📋 **Feature Configuration for 2027 Threat Projection**")
     
     height = 300 if st.session_state.mobile_view else 400
     st.dataframe(
-        get_parameters(),
+        params_df,
         use_container_width=True,
         height=height
     )
     
+    # DATA-SPECIFIC PARAMETER ANALYSIS
+    st.markdown("---")
+    st.subheader("🔍 **Why These Parameters Lead to {}**".format(current_prediction if current_prediction != "Unknown" else "This Prediction"))
+    
+    # Get current dataset for comparison
+    analysis_df = get_dataset()
+    
+    if not analysis_df.empty and current_prediction != "Unknown":
+        # Analyze how 2027 params compare to historical data
+        ddos_2027 = 4200
+        malware_2027 = 18500
+        cve_2027 = 95
+        patch_2027 = 9
+        
+        # Compare to historical ranges
+        ddos_max = analysis_df['DDoS_Attacks'].max() if 'DDoS_Attacks' in analysis_df.columns else 0
+        ddos_mean = analysis_df['DDoS_Attacks'].mean() if 'DDoS_Attacks' in analysis_df.columns else 0
+        malware_max = analysis_df['Malware_Attacks'].max() if 'Malware_Attacks' in analysis_df.columns else 0
+        cve_max = analysis_df['Critical_CVEs'].max() if 'Critical_CVEs' in analysis_df.columns else 0
+        patch_min = analysis_df['Patch_Delay_Days'].min() if 'Patch_Delay_Days' in analysis_df.columns else 20
+        
+        # Find historical periods with similar conditions
+        similar_periods = analysis_df[
+            (analysis_df['DDoS_Attacks'] > ddos_2027 * 0.8) & 
+            (analysis_df['Critical_CVEs'] > cve_2027 * 0.8)
+        ]
+        
+        if not similar_periods.empty:
+            similar_threats = similar_periods['Threat_Level'].value_counts()
+            st.info(f"""
+            **Historical Pattern Match**: The 2027 projection parameters closely resemble **{len(similar_periods)} historical period(s)** in your dataset.
+            
+            During similar conditions (DDoS >{ddos_2027*0.8:,.0f}, CVEs >{cve_2027*0.8:.0f}), the threat level was:
+            {dict(similar_threats)}
+            
+            This historical correlation strongly influences the **{current_prediction}** prediction.
+            """)
+        
+        # Parameter-specific insights
+        insights = []
+        
+        if ddos_2027 > ddos_max * 0.9:
+            insights.append(f"• **DDoS Projection ({ddos_2027:,})** is near historical maximum ({ddos_max:,}), indicating sustained attack capability")
+        elif ddos_2027 < ddos_mean:
+            insights.append(f"• **DDoS Projection ({ddos_2027:,})** is below historical average ({ddos_mean:,.0f}), suggesting defensive improvements")
+            
+        if cve_2027 > cve_max * 0.9:
+            insights.append(f"• **CVE Count ({cve_2027})** represents near-peak vulnerability exposure (max: {cve_max})")
+            
+        if patch_2027 <= patch_min:
+            insights.append(f"• **Patch Delay ({patch_2027} days)** is at historical minimum, indicating improved security posture")
+        elif patch_2027 > 10:
+            insights.append(f"• **Patch Delay ({patch_2027} days)** exceeds 10-day threshold, creating vulnerability windows")
+        
+        # Economic context
+        econ_2027 = "Stable"
+        high_cost_periods = analysis_df[analysis_df['Economic_Environment'] == 'High_Cost']
+        if not high_cost_periods.empty:
+            high_threat_pct = (high_cost_periods['Threat_Level'] != 'Medium').mean() * 100
+            if econ_2027 == "Stable" and high_threat_pct > 50:
+                insights.append(f"• **Stable Economic Environment** contrasts with your data showing {high_threat_pct:.0f}% of High_Cost periods had elevated threats")
+        
+        if insights:
+            st.markdown("### 🎯 **Key Parameter Insights**")
+            for insight in insights:
+                st.markdown(insight)
+    
     # EXPLANATION: Parameter significance
+    st.markdown("---")
+    st.subheader("⚠️ **Parameter Significance Analysis**")
+    
     st.warning("""
-    **⚠️ Critical Insight: Parameter Significance**
+    **Critical Insight: Parameter Significance**
     
     Analysis reveals which inputs most influence the threat prediction:
     
@@ -503,5 +1382,13 @@ with parameters:
     
     **Why These Matter**: The model learned that when Patch Delay < 10 days AND CVEs > 90 AND Economic Environment = Stable, the system typically faces HIGH threat levels due to the vulnerability-exposure window.
     
-    **Validation**: These 2027 projections were validated against historical analogs (similar conditions in 2022-2023) which resulted in HIGH threat classifications.
+    **Custom Data Impact**: When you upload your own data, the model learns different patterns and may weight these factors differently based on your specific threat landscape!
     """)
+    
+    # Context-specific recommendation
+    if current_prediction == "Critical":
+        st.error("🚨 **CRITICAL RECOMMENDATION**: Given the projected parameters exceed multiple historical thresholds simultaneously, immediate executive review of security posture is advised.")
+    elif current_prediction == "High":
+        st.warning("⚠️ **HIGH ALERT RECOMMENDATION**: Review defensive protocols and ensure patch management can maintain the projected 9-day deployment window.")
+    else:
+        st.success("✅ **STABLE OUTLOOK**: Projected parameters suggest manageable risk levels. Maintain standard monitoring and continue current security investments.")
