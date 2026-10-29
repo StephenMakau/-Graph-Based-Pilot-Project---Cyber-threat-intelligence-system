@@ -89,11 +89,13 @@ nav_css = f"""
     .main .block-container {{ padding-top: 92px !important; }}
 
     .st-key-top_nav {{
-        position: fixed;
+        position: fixed !important;
         top: 0;
         left: 0;
         right: 0;
-        z-index: 1000000;
+        z-index: 2147483000 !important;
+        isolation: isolate;
+        pointer-events: auto !important;
         min-height: 68px;
         padding: 8px 18px 6px;
         background: {nav_background};
@@ -115,6 +117,8 @@ nav_css = f"""
         scrollbar-width: none;
     }}
     .st-key-top_nav [role="radiogroup"] label {{
+        cursor: pointer !important;
+        pointer-events: auto !important;
         white-space: nowrap;
         border: 1px solid rgba(148, 163, 184, .20);
         border-radius: 8px;
@@ -179,7 +183,7 @@ st.markdown(nav_css, unsafe_allow_html=True)
 with st.container(key="top_nav"):
     col_ham, col_title, col_nav = st.columns([0.7, 3.0, 10.5], vertical_alignment="center")
     with col_ham:
-        if st.button("Menu", key="hamburger_btn", help="Open system controls", type="primary", icon=":material/menu:"):
+        if st.button("MENU", key="hamburger_btn", help="Open system controls", type="primary"):
             st.session_state.controls_open = not st.session_state.controls_open
             st.rerun()
     with col_title:
@@ -189,13 +193,15 @@ with st.container(key="top_nav"):
             unsafe_allow_html=True
         )
     with col_nav:
+        # Text-first navigation avoids generic stock iconography and keeps the
+        # interface closer to a purpose-built monitoring console.
         tab_options = {
-            "home": ":material/home: HOME",
-            "data_upload": ":material/upload_file: DATA UPLOAD",
-            "overview": ":material/description: PROJECT OVERVIEW",
-            "dataset": ":material/analytics: DATASET",
-            "models": ":material/model_training: AI MODELS",
-            "parameters": ":material/tune: PARAMETERS"
+            "home": "OVERVIEW",
+            "data_upload": "DATA INTAKE",
+            "overview": "PROJECT NOTES",
+            "dataset": "DATASET",
+            "models": "MODEL OUTPUTS",
+            "parameters": "CONFIGURATION"
         }
         selected_tab = st.radio(
             "Navigation",
@@ -216,21 +222,21 @@ with st.container(key="top_nav"):
 with st.sidebar:
     close_col, heading_col = st.columns([1, 5])
     with close_col:
-        if st.button("Close", key="close_controls", help="Close system controls", icon=":material/close:"):
+        if st.button("CLOSE PANEL", key="close_controls", help="Close system controls"):
             st.session_state.controls_open = False
             st.rerun()
     with heading_col:
-        st.markdown("### :material/tune: SYSTEM CONTROLS")
+        st.markdown("### SYSTEM CONTROLS")
     st.caption("Appearance and display settings")
     st.divider()
 
     st.session_state.dark_mode = st.toggle(
-        ":material/dark_mode: Dark mode",
+        "Dark appearance",
         value=st.session_state.dark_mode,
         help="Turn dark appearance on or off."
     )
     st.session_state.mobile_view = st.toggle(
-        ":material/smartphone: Mobile phone view",
+        "Compact mobile layout",
         value=st.session_state.mobile_view,
         help="Use a narrow, phone-sized content layout. This changes the app layout, not your device."
     )
@@ -346,7 +352,10 @@ contrast_css = f"""
     @keyframes watermark-sweep {{ from {{ transform: rotate(0deg); }} to {{ transform: rotate(360deg); }} }}
     .stApp {{ --watermark-line: #b6c7d0; }}
     .stApp [data-testid="stAppViewContainer"], .stApp [data-testid="stHeader"] {{ position: relative; }}
-    .stApp [data-testid="stMainBlockContainer"] {{ position: relative; z-index: 1; }}
+    /* Do not create a stacking context above the fixed navigation. This keeps
+       the navigation's high z-index effective and the tabs clickable. */
+    .stApp [data-testid="stMainBlockContainer"] {{ position: relative; z-index: auto !important; }}
+    .st-key-top_nav, .st-key-top_nav * {{ pointer-events: auto; }}
     .st-key-top_nav {{ backdrop-filter: blur(10px); }}
     .st-key-top_nav [role="radiogroup"] label {{ border-radius: 5px !important; }}
     .st-key-top_nav [role="radiogroup"] label:has(input:checked) {{ box-shadow: inset 0 -2px 0 var(--brand-accent, #6b9aad) !important; }}
