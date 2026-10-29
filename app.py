@@ -35,151 +35,173 @@ if 'uploaded_data' not in st.session_state:
 if 'training_status' not in st.session_state:
     st.session_state.training_status = None
 
-# Get current year
+if 'active_tab' not in st.session_state:
+    st.session_state.active_tab = "home"
+
+# Get current year from browser/system
 current_year = datetime.now().year
 
 # =====================================
 # PAGE CONFIG
 # =====================================
 st.set_page_config(
-    page_title="CYBER THREAT INTELLIGENCE",
+    page_title="MKU Cyber Threat Intelligence",
     page_icon="🛡️",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
 
 # =====================================
-# CUSTOM CSS - FIXED NAVIGATION & FUTURISTIC UI
+# CUSTOM CSS - FIXED NAVIGATION BAR
 # =====================================
-# Note: Using raw string and proper escaping to avoid f-string errors
-nav_css = """
+nav_css = f"""
 <style>
     /* Hide default Streamlit elements */
-    #MainMenu {visibility: hidden;}
-    header {visibility: hidden;}
-    footer {visibility: hidden;}
+    #MainMenu {{visibility: hidden;}}
+    header {{visibility: hidden;}}
+    footer {{visibility: hidden;}}
     
-    /* Hide default sidebar toggle button */
-    button[kind="header"] {
+    /* Hide default sidebar toggle button completely */
+    button[kind="header"] {{
         display: none !important;
-    }
+    }}
     
-    /* FIXED NAVIGATION BAR CONTAINER */
-    .fixed-nav-container {
+    /* Fixed Navigation Bar at very top */
+    .nav-container {{
         position: fixed;
         top: 0;
         left: 0;
         right: 0;
-        height: 70px;
-        background: rgba(15, 23, 42, 0.95);
-        backdrop-filter: blur(10px);
-        border-bottom: 1px solid rgba(6, 182, 212, 0.2);
+        height: 60px;
+        background: linear-gradient(90deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
+        border-bottom: 2px solid #06b6d4;
         z-index: 999999;
         display: flex;
         align-items: center;
         justify-content: space-between;
         padding: 0 20px;
-        box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
-    }
+        box-shadow: 0 4px 20px rgba(6, 182, 212, 0.3);
+    }}
     
     /* Push content below nav */
-    .main .block-container {
-        padding-top: 90px !important;
-        padding-bottom: 20px;
-    }
+    .main .block-container {{
+        padding-top: 80px !important;
+    }}
     
-    /* Sidebar styling for Controls */
-    [data-testid="stSidebar"] {
+    /* Sidebar styling */
+    [data-testid="stSidebar"] {{
         background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%) !important;
-        border-right: 1px solid rgba(6, 182, 212, 0.2);
-    }
+    }}
     
-    /* Custom Navigation Tabs Styling */
-    .stTabs [data-testid="stTab"] {
-        background: rgba(30, 41, 59, 0.5);
-        border: 1px solid rgba(6, 182, 212, 0.1);
-        color: #94a3b8;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-        margin-right: 5px;
-        transition: all 0.3s ease;
-    }
-    
-    .stTabs [data-testid="stTab"]:hover {
-        background: rgba(6, 182, 212, 0.1);
-        color: #06b6d4;
-        border-color: #06b6d4;
-        box-shadow: 0 0 15px rgba(6, 182, 212, 0.2);
-    }
-    
-    .stTabs [data-testid="stTab"][aria-selected="true"] {
-        background: linear-gradient(135deg, #06b6d4, #3b82f6);
-        color: #ffffff !important;
-        border-color: #06b6d4;
-        box-shadow: 0 0 20px rgba(6, 182, 212, 0.4);
-        text-shadow: 0 0 5px rgba(255,255,255,0.5);
-    }
-    
-    /* Hide the tab list container styling that might interfere */
-    .stTabs [data-testid="stHorizontalBlock"] {
-        justify-content: flex-start;
-        gap: 10px;
-    }
+    /* Radio button styling for nav */
+    div[data-testid="stHorizontalBlock"] {{
+        background: transparent !important;
+    }}
     
     /* Mobile responsive */
-    @media (max-width: 768px) {
-        .nav-title { font-size: 0.85rem; }
-        .fixed-nav-container { padding: 0 10px; }
-    }
+    @media (max-width: 768px) {{
+        .nav-title {{ font-size: 0.85rem; }}
+    }}
 </style>
 """
 
 st.markdown(nav_css, unsafe_allow_html=True)
 
 # =====================================
-# SIDEBAR CONTROLS (SYSTEM SETTINGS)
+# FIXED NAVIGATION BAR - USING STREAMLIT NATIVE COMPONENTS
+# =====================================
+# Create a container for the fixed nav that stays at top
+nav_container = st.container()
+
+with nav_container:
+    # Use columns for layout - this creates the fixed bar effect
+    col_ham, col_title, col_nav = st.columns([1, 4, 10])
+    
+    with col_ham:
+        # Hamburger button using Streamlit native button
+        if st.button("☰", key="hamburger_btn", help="System Controls", 
+                    type="primary", use_container_width=False):
+            # Toggle sidebar via JavaScript injection
+            st.components.v1.html("""
+            <script>
+                // Find and click the sidebar toggle button
+                var sidebarButton = window.parent.document.querySelector('button[kind="header"]');
+                if (sidebarButton) {
+                    sidebarButton.click();
+                }
+            </script>
+            """, height=0)
+    
+    with col_title:
+        st.markdown('<span style="color: #06b6d4; font-size: 1.1rem; font-weight: 700; text-shadow: 0 0 10px rgba(6, 182, 212, 0.5);">🛡️ MKU CYBER THREAT INTELLIGENCE</span>', unsafe_allow_html=True)
+    
+    with col_nav:
+        # Navigation tabs using Streamlit native radio - THIS IS CLICKABLE
+        tab_options = {
+            "home": "🏠 HOME",
+            "data_upload": "📤 DATA UPLOAD", 
+            "overview": "📄 PROJECT OVERVIEW",
+            "dataset": "📊 DATASET",
+            "models": "🤖 AI MODELS",
+            "parameters": "⚙️ PARAMETERS"
+        }
+        
+        # Horizontal radio for navigation - NATIVE STREAMLIT COMPONENT
+        selected_tab = st.radio(
+            "Navigation",
+            options=list(tab_options.keys()),
+            format_func=lambda x: tab_options[x],
+            index=list(tab_options.keys()).index(st.session_state.active_tab) if st.session_state.active_tab in tab_options else 0,
+            horizontal=True,
+            label_visibility="collapsed",
+            key="nav_radio"
+        )
+        
+        # Update active tab when changed
+        if selected_tab != st.session_state.active_tab:
+            st.session_state.active_tab = selected_tab
+            st.rerun()
+
+# =====================================
+# SIDEBAR CONTROLS (Opened via Hamburger)
 # =====================================
 with st.sidebar:
     st.markdown("""
-    <div style="text-align: center; margin: 20px 0; padding: 20px; background: rgba(6, 182, 212, 0.1); border-radius: 10px; border: 1px solid rgba(6, 182, 212, 0.2);">
-        <div style="font-size: 2rem; margin-bottom: 10px;">🛡️</div>
-        <h3 style="color: #06b6d4; margin: 0; font-family: 'JetBrains Mono', monospace;">SYSTEM CONTROL</h3>
-        <p style="color: #94a3b8; font-size: 0.8rem; margin-top: 5px;">AUTHORIZED PERSONNEL ONLY</p>
+    <div style="text-align: center; margin: 20px 0;">
+        <div style="display: inline-block; padding: 15px; background: linear-gradient(135deg, #06b6d4, #3b82f6); border-radius: 12px; box-shadow: 0 0 20px rgba(6, 182, 212, 0.5);">
+            <div style="width: 30px; height: 3px; background: white; margin: 5px 0; border-radius: 2px;"></div>
+            <div style="width: 30px; height: 3px; background: white; margin: 5px 0; border-radius: 2px;"></div>
+            <div style="width: 30px; height: 3px; background: white; margin: 5px 0; border-radius: 2px;"></div>
+        </div>
+        <p style="color: #06b6d4; font-size: 0.9rem; margin-top: 12px; font-weight: 600;">⚙️ SYSTEM CONTROLS</p>
     </div>
     """, unsafe_allow_html=True)
     
     st.markdown("---")
     
-    st.mark("### 🎨 DISPLAY SETTINGS")
     dark_mode = st.toggle(
-        "🌙 Dark Mode", 
+        "🌙 Dark Mode / ☀️ Light Mode", 
         value=st.session_state.dark_mode,
         help="Switch between Dark and Light theme"
     )
     st.session_state.dark_mode = dark_mode
     
-    st.mark("### 📱 VIEW MODE")
     mobile_view = st.toggle(
-        "📱 Mobile View", 
+        "📱 Mobile View / 💻 Desktop View", 
         value=st.session_state.mobile_view,
         help="Switch between Mobile and Desktop layout"
     )
     st.session_state.mobile_view = mobile_view
     
-    st.mark("---")
+    st.markdown("---")
     
     data_source = get_current_data_source()
     if data_source == "uploaded":
-        st.success("📊 STATUS: CUSTOM DATA ACTIVE")
+        st.success("📊 Using: **Uploaded Data**")
     else:
-        st.info("📊 STATUS: DEFAULT DATASET")
+        st.info("📊 Using: **Default Dataset**")
     
-    st.caption(f"⏱️ SYS.TIME: {datetime.now(ZoneInfo('Africa/Nairobi')).strftime('%H:%M:%S')} EAT")
-    
-    st.mark("---")
-    st.mark("### 🔒 SECURITY PROTOCOL")
-    st.info("All interactions are logged and monitored for security purposes.")
+    st.caption(f"System Time: {datetime.now(ZoneInfo('Africa/Nairobi')).strftime('%H:%M:%S')}")
 
 # =====================================
 # THEME CSS
@@ -193,6 +215,9 @@ if st.session_state.dark_mode:
         h2 { color: #06b6d4 !important; border-left: 4px solid #06b6d4; }
         h3 { color: #8b5cf6 !important; }
         p, li, div, span, label, .stMarkdown, .stAlert { color: #e2e8f0 !important; }
+        .stTabs [data-testid="stTab"] { color: #94a3b8; background: rgba(30, 41, 59, 0.6); border: 1px solid rgba(6, 182, 212, 0.2); }
+        .stTabs [data-testid="stTab"]:hover { color: #06b6d4; background: rgba(6, 182, 212, 0.1); }
+        .stTabs [data-testid="stTab"][aria-selected="true"] { background: linear-gradient(135deg, #06b6d4, #3b82f6); color: #ffffff !important; }
         [data-testid="stMetric"] { background: rgba(30, 41, 59, 0.7); border: 1px solid rgba(6, 182, 212, 0.3); }
         [data-testid="stMetricValue"] { color: #06b6d4 !important; }
         [data-testid="stMetricLabel"] { color: #94a3b8 !important; }
@@ -217,6 +242,9 @@ else:
         h2 { color: #0369a1 !important; border-left: 4px solid #0369a1; }
         h3 { color: #7c3aed !important; }
         p, li, div, span, label, .stMarkdown, .stAlert { color: #334155 !important; }
+        .stTabs [data-testid="stTab"] { color: #64748b; background: rgba(255, 255, 255, 0.8); border: 1px solid rgba(37, 99, 235, 0.2); }
+        .stTabs [data-testid="stTab"]:hover { color: #0369a1; background: rgba(37, 99, 235, 0.1); }
+        .stTabs [data-testid="stTab"][aria-selected="true"] { background: linear-gradient(135deg, #0369a1, #2563eb); color: #ffffff !important; }
         [data-testid="stMetric"] { background: rgba(255, 255, 255, 0.9); border: 1px solid rgba(37, 99, 235, 0.3); box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
         [data-testid="stMetricValue"] { color: #0369a1 !important; }
         [data-testid="stMetricLabel"] { color: #64748b !important; }
@@ -259,69 +287,89 @@ else:
 st.markdown(theme_css + mobile_css, unsafe_allow_html=True)
 
 # =====================================
-# HELPER FUNCTIONS (UNCHANGED LOGIC)
+# HELPER FUNCTION TO ANALYZE DATA PATTERNS
 # =====================================
 def analyze_dataset_patterns(df):
+    """Analyze dataset to extract key patterns dynamically"""
     patterns = []
+    
     if df.empty:
         return ["No data available for analysis."]
     
+    # 1. Find Critical threat periods
     critical_rows = df[df['Threat_Level'] == 'Critical']
     if not critical_rows.empty:
         years = critical_rows['Year'].unique()
         if len(years) == 1:
             patterns.append(f"**Critical Peak**: The only 'Critical' threat period occurred in **{years[0]}** when DDoS attacks reached {critical_rows['DDoS_Attacks'].max():,} and malware hit {critical_rows['Malware_Attacks'].max():,} incidents.")
         else:
-            years_str = ', '.join(map(str, years))
-            patterns.append(f"**Critical Periods**: Critical threat levels observed in **{years_str}** with peak DDoS of {critical_rows['DDoS_Attacks'].max():,}.")
+            patterns.append(f"**Critical Periods**: Critical threat levels observed in **{', '.join(map(str, years))}** with peak DDoS of {critical_rows['DDoS_Attacks'].max():,}.")
     else:
         patterns.append("**No Critical Threats**: The dataset contains no Critical threat classifications - all periods were Medium or High risk.")
     
+    # 2. Economic Environment correlation
+    econ_threat = df.groupby(['Economic_Environment', 'Threat_Level']).size().unstack(fill_value=0)
     high_cost_critical = df[(df['Economic_Environment'] == 'High_Cost') & (df['Threat_Level'] == 'Critical')]
     if not high_cost_critical.empty:
         patterns.append(f"**Economic Stress Correlation**: High_Cost economic periods show elevated threats, with {len(high_cost_critical)} Critical classification(s).")
     
+    # 3. Patch Delay impact
     low_patch = df[df['Patch_Delay_Days'] < 10]
     if not low_patch.empty:
         threat_dist = low_patch['Threat_Level'].value_counts()
         dominant = threat_dist.index[0] if not threat_dist.empty else "Unknown"
-        count = threat_dist.get(dominant, 0)
-        patterns.append(f"**Patch Speed Impact**: When patch delays drop below 10 days, threat levels trend toward **{dominant}** ({count} of {len(low_patch)} periods).")
+        patterns.append(f"**Patch Speed Impact**: When patch delays drop below 10 days, threat levels trend toward **{dominant}** ({threat_dist.get(dominant, 0)} of {len(low_patch)} periods).")
     
+    # 4. Attack volume trends
     df_sorted = df.sort_values(['Year', 'Month'])
     first_ddos = df_sorted['DDoS_Attacks'].iloc[0] if len(df_sorted) > 0 else 0
     last_ddos = df_sorted['DDoS_Attacks'].iloc[-1] if len(df_sorted) > 0 else 0
     
-    if first_ddos > 0:
-        if last_ddos > first_ddos * 1.5:
-            growth = ((last_ddos/first_ddos-1)*100)
-            patterns.append(f"**Escalation Trend**: DDoS attacks increased from {first_ddos:,} to {last_ddos:,} ({growth:.0f}% growth) across the observation period.")
-        elif last_ddos < first_ddos * 0.7:
-            reduction = ((1-last_ddos/first_ddos)*100)
-            patterns.append(f"**Declining Trend**: DDoS attacks decreased from {first_ddos:,} to {last_ddos:,} ({reduction:.0f}% reduction) - defensive measures may be working.")
-        else:
-            patterns.append(f"**Stable Volume**: DDoS attacks remained relatively stable between {first_ddos:,} and {last_ddos:,} incidents.")
+    if last_ddos > first_ddos * 1.5:
+        patterns.append(f"**Escalation Trend**: DDoS attacks increased from {first_ddos:,} to {last_ddos:,} ({((last_ddos/first_ddos-1)*100):.0f}% growth) across the observation period.")
+    elif last_ddos < first_ddos * 0.7:
+        patterns.append(f"**Declining Trend**: DDoS attacks decreased from {first_ddos:,} to {last_ddos:,} ({((1-last_ddos/first_ddos)*100):.0f}% reduction) - defensive measures may be working.")
+    else:
+        patterns.append(f"**Stable Volume**: DDoS attacks remained relatively stable between {first_ddos:,} and {last_ddos:,} incidents.")
     
-    if 'Critical_CVEs' in df.columns:
-        mean_cve = df['Critical_CVEs'].mean()
-        std_cve = df['Critical_CVEs'].std()
-        if std_cve > 0:
-            high_cve = df[df['Critical_CVEs'] > mean_cve + std_cve]
-            if not high_cve.empty:
-                high_threat_pct = (high_cve['Threat_Level'] != 'Medium').mean() * 100
-                threshold = mean_cve + std_cve
-                patterns.append(f"**Vulnerability Window**: High CVE periods (>{threshold:.0f}) correlate with elevated threats {high_threat_pct:.0f}% of the time.")
+    # 5. CVE correlation
+    high_cve = df[df['Critical_CVEs'] > df['Critical_CVEs'].mean() + df['Critical_CVEs'].std()]
+    if not high_cve.empty:
+        high_threat_pct = (high_cve['Threat_Level'] != 'Medium').mean() * 100
+        patterns.append(f"**Vulnerability Window**: High CVE periods (>{df['Critical_CVEs'].mean() + df['Critical_CVEs'].std():.0f}) correlate with elevated threats {high_threat_pct:.0f}% of the time.")
+    
+    # 6. Inflation correlation
+    high_inflation = df[df['Inflation_Rate'] > 7.0]
+    if not high_inflation.empty:
+        threat_dist = high_inflation['Threat_Level'].value_counts()
+        patterns.append(f"**Economic Pressure**: High inflation periods (>{7.0}%) show threat distribution: {dict(threat_dist)}.")
     
     return patterns
 
+# =====================================
+# FUTURISTIC GRAPH FUNCTION
+# =====================================
 def create_futuristic_graph(df):
+    """
+    Create a futuristic cyberpunk-style visualization of threat data
+    """
     try:
         df = df.copy()
+        
+        # Safely create date column
+        # Ensure Year and Month are numeric
         df['Year'] = pd.to_numeric(df['Year'], errors='coerce')
         df['Month'] = pd.to_numeric(df['Month'], errors='coerce')
+        
+        # Drop rows with invalid dates
         df = df.dropna(subset=['Year', 'Month'])
+        
+        # Convert Month to 1-12 range if it looks like a year (e.g. 2021 -> 1)
+        # This handles the specific error in your default data where Month had 2021
         df['Month'] = df['Month'].apply(lambda x: int(x) if 1 <= int(x) <= 12 else 1)
         df['Year'] = df['Year'].astype(int)
+        
+        # Create proper date objects
         df['Date'] = pd.to_datetime(df[['Year', 'Month']].assign(day=1))
         df = df.sort_values('Date')
         
@@ -329,6 +377,7 @@ def create_futuristic_graph(df):
             st.error("No valid data available for visualization.")
             return None
 
+        # Create figure with secondary y-axis
         fig = make_subplots(
             rows=2, cols=1,
             shared_xaxes=True,
@@ -337,50 +386,215 @@ def create_futuristic_graph(df):
             subplot_titles=('⚡ ATTACK VECTORS OVER TIME', '🔒 VULNERABILITY METRICS')
         )
         
+        # Color palette - Cyberpunk Neon
         colors = {
-            'ddos': '#00f5ff', 'malware': '#ff00ff', 'phishing': '#39ff14',
-            'web': '#ff6b35', 'cves': '#ff1744', 'patch': '#ffd700',
-            'traffic': '#8b5cf6', 'grid': 'rgba(6, 182, 212, 0.1)', 'text': '#e2e8f0'
+            'ddos': '#00f5ff',      # Cyan
+            'malware': '#ff00ff',   # Magenta
+            'phishing': '#39ff14',  # Neon Green
+            'web': '#ff6b35',       # Orange-Red
+            'cves': '#ff1744',      # Red
+            'patch': '#ffd700',     # Gold
+            'traffic': '#8b5cf6',   # Purple
+            'grid': 'rgba(6, 182, 212, 0.1)',
+            'text': '#e2e8f0'
         }
         
-        fig.add_trace(go.Scatter(x=df['Date'], y=df['DDoS_Attacks'], name='DDoS Attacks', mode='lines+markers', line=dict(color=colors['ddos'], width=3), marker=dict(size=8, symbol='diamond', line=dict(width=2, color='white')), fill='tonexty', fillcolor='rgba(0, 245, 255, 0.1)'), row=1, col=1)
-        fig.add_trace(go.Scatter(x=df['Date'], y=df['Malware_Attacks'], name='Malware', mode='lines+markers', line=dict(color=colors['malware'], width=3), marker=dict(size=8, symbol='circle', line=dict(width=2, color='white')), fill='tonexty', fillcolor='rgba(255, 0, 255, 0.1)'), row=1, col=1)
-        fig.add_trace(go.Scatter(x=df['Date'], y=df['Phishing_Attacks'], name='Phishing', mode='lines+markers', line=dict(color=colors['phishing'], width=3), marker=dict(size=8, symbol='triangle-up', line=dict(width=2, color='white')), row=1, col=1)
-        fig.add_trace(go.Scatter(x=df['Date'], y=df['Web_Attacks'], name='Web Attacks', mode='lines+markers', line=dict(color=colors['web'], width=3, dash='dot'), marker=dict(size=8, symbol='square', line=dict(width=2, color='white')), row=1, col=1)
-        fig.add_trace(go.Bar(x=df['Date'], y=df['Critical_CVEs'], name='Critical CVEs', marker=dict(color=colors['cves'], line=dict(color='white', width=1), opacity=0.8), text=df['Critical_CVEs'], textposition='outside', textfont=dict(color=colors['cves'], size=10)), row=2, col=1)
-        fig.add_trace(go.Scatter(x=df['Date'], y=df['Patch_Delay_Days'], name='Patch Delay (Days)', mode='lines+markers', line=dict(color=colors['patch'], width=3), marker=dict(size=10, symbol='x', line=dict(width=2, color='white')), yaxis='y3'), row=2, col=1)
+        # Row 1: Attack Volumes
+        fig.add_trace(
+            go.Scatter(
+                x=df['Date'], y=df['DDoS_Attacks'],
+                name='DDoS Attacks',
+                mode='lines+markers',
+                line=dict(color=colors['ddos'], width=3),
+                marker=dict(size=8, symbol='diamond', line=dict(width=2, color='white')),
+                fill='tonexty',
+                fillcolor='rgba(0, 245, 255, 0.1)'
+            ),
+            row=1, col=1
+        )
         
+        fig.add_trace(
+            go.Scatter(
+                x=df['Date'], y=df['Malware_Attacks'],
+                name='Malware',
+                mode='lines+markers',
+                line=dict(color=colors['malware'], width=3),
+                marker=dict(size=8, symbol='circle', line=dict(width=2, color='white')),
+                fill='tonexty',
+                fillcolor='rgba(255, 0, 255, 0.1)'
+            ),
+            row=1, col=1
+        )
+        
+        fig.add_trace(
+            go.Scatter(
+                x=df['Date'], y=df['Phishing_Attacks'],
+                name='Phishing',
+                mode='lines+markers',
+                line=dict(color=colors['phishing'], width=3),
+                marker=dict(size=8, symbol='triangle-up', line=dict(width=2, color='white')),
+            ),
+            row=1, col=1
+        )
+        
+        fig.add_trace(
+            go.Scatter(
+                x=df['Date'], y=df['Web_Attacks'],
+                name='Web Attacks',
+                mode='lines+markers',
+                line=dict(color=colors['web'], width=3, dash='dot'),
+                marker=dict(size=8, symbol='square', line=dict(width=2, color='white')),
+            ),
+            row=1, col=1
+        )
+        
+        # Row 2: Vulnerability Metrics (scaled for visibility)
+        fig.add_trace(
+            go.Bar(
+                x=df['Date'], y=df['Critical_CVEs'],
+                name='Critical CVEs',
+                marker=dict(
+                    color=colors['cves'],
+                    line=dict(color='white', width=1),
+                    opacity=0.8
+                ),
+                text=df['Critical_CVEs'],
+                textposition='outside',
+                textfont=dict(color=colors['cves'], size=10)
+            ),
+            row=2, col=1
+        )
+        
+        # Add Patch Delay as line on secondary axis
+        fig.add_trace(
+            go.Scatter(
+                x=df['Date'], y=df['Patch_Delay_Days'],
+                name='Patch Delay (Days)',
+                mode='lines+markers',
+                line=dict(color=colors['patch'], width=3),
+                marker=dict(size=10, symbol='x', line=dict(width=2, color='white')),
+                yaxis='y3'
+            ),
+            row=2, col=1
+        )
+        
+        # Update layout with futuristic styling
         fig.update_layout(
             template='plotly_dark',
             paper_bgcolor='rgba(0,0,0,0)',
             plot_bgcolor='rgba(11, 17, 32, 0.8)',
             font=dict(family='JetBrains Mono, monospace', color=colors['text'], size=11),
             showlegend=True,
-            legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1, bgcolor='rgba(11, 17, 32, 0.9)', bordercolor='#06b6d4', borderwidth=1, font=dict(size=10)),
+            legend=dict(
+                orientation='h',
+                yanchor='bottom',
+                y=1.02,
+                xanchor='right',
+                x=1,
+                bgcolor='rgba(11, 17, 32, 0.9)',
+                bordercolor='#06b6d4',
+                borderwidth=1,
+                font=dict(size=10)
+            ),
             margin=dict(l=60, r=60, t=100, b=60),
             hovermode='x unified',
-            xaxis=dict(showgrid=True, gridcolor=colors['grid'], gridwidth=1, zeroline=False, linecolor='#06b6d4', linewidth=2, tickfont=dict(size=10)),
-            xaxis2=dict(showgrid=True, gridcolor=colors['grid'], gridwidth=1, zeroline=False, linecolor='#06b6d4', linewidth=2, title='Timeline'),
-            yaxis=dict(title=dict(text='Attack Volume', font=dict(size=12, color='#06b6d4')), showgrid=True, gridcolor=colors['grid'], gridwidth=1, zeroline=False, linecolor='#06b6d4', linewidth=2, tickfont=dict(size=10)),
-            yaxis2=dict(title=dict(text='CVE Count', font=dict(size=12, color='#ff1744')), showgrid=True, gridcolor=colors['grid'], gridwidth=1, zeroline=False, linecolor='#ff1744', linewidth=2, tickfont=dict(size=10)),
-            yaxis3=dict(title=dict(text='Patch Delay (Days)', font=dict(size=12, color='#ffd700)), overlaying='y2', side='right', showgrid=False, zeroline=False, linecolor='#ffd700', linewidth=2, tickfont=dict(size=10, color='#ffd700')),
-            title=dict(text='📊 CYBER THREAT INTELLIGENCE // VISUALIZATION MODULE', font=dict(size=16, color='#06b6d4', family='JetBrains Mono'), x=0.5, xanchor='center'),
+            xaxis=dict(
+                showgrid=True,
+                gridcolor=colors['grid'],
+                gridwidth=1,
+                zeroline=False,
+                linecolor='#06b6d4',
+                linewidth=2,
+                tickfont=dict(size=10)
+            ),
+            xaxis2=dict(
+                showgrid=True,
+                gridcolor=colors['grid'],
+                gridwidth=1,
+                zeroline=False,
+                linecolor='#06b6d4',
+                linewidth=2,
+                title='Timeline'
+            ),
+            yaxis=dict(
+                title=dict(text='Attack Volume', font=dict(size=12, color='#06b6d4')),
+                showgrid=True,
+                gridcolor=colors['grid'],
+                gridwidth=1,
+                zeroline=False,
+                linecolor='#06b6d4',
+                linewidth=2,
+                tickfont=dict(size=10)
+            ),
+            yaxis2=dict(
+                title=dict(text='CVE Count', font=dict(size=12, color='#ff1744')),
+                showgrid=True,
+                gridcolor=colors['grid'],
+                gridwidth=1,
+                zeroline=False,
+                linecolor='#ff1744',
+                linewidth=2,
+                tickfont=dict(size=10)
+            ),
+            yaxis3=dict(
+                title=dict(text='Patch Delay (Days)', font=dict(size=12, color='#ffd700')),
+                overlaying='y2',
+                side='right',
+                showgrid=False,
+                zeroline=False,
+                linecolor='#ffd700',
+                linewidth=2,
+                tickfont=dict(size=10, color='#ffd700')
+            ),
+            title=dict(
+                text='📊 CYBER THREAT INTELLIGENCE // VISUALIZATION MODULE',
+                font=dict(size=16, color='#06b6d4', family='JetBrains Mono'),
+                x=0.5,
+                xanchor='center'
+            ),
+            # Add futuristic shapes
             shapes=[
-                dict(type='line', x0=0, x1=1, y0=1.15, y1=1.15, xref='paper', yref='paper', line=dict(color='#06b6d4', width=2)),
-                dict(type='line', x0=0, x1=1, y0=-0.15, y1=-0.15, xref='paper', yref='paper', line=dict(color='#06b6d4', width=2)),
+                # Top border line
+                dict(type='line', x0=0, x1=1, y0=1.15, y1=1.15, 
+                     xref='paper', yref='paper',
+                     line=dict(color='#06b6d4', width=2)),
+                # Bottom border line
+                dict(type='line', x0=0, x1=1, y0=-0.15, y1=-0.15,
+                     xref='paper', yref='paper',
+                     line=dict(color='#06b6d4', width=2)),
             ],
+            # Add annotations for futuristic feel
             annotations=[
-                dict(text='◢ LIVE DATA STREAM ◣', xref='paper', yref='paper', x=0.5, y=1.08, showarrow=False, font=dict(size=10, color='#00f5ff, family='monospace'), bgcolor='rgba(0,0,0,0.5)', bordercolor='#00f5ff', borderpad=4)
+                dict(
+                    text='◢ LIVE DATA STREAM ◣',
+                    xref='paper', yref='paper',
+                    x=0.5, y=1.08,
+                    showarrow=False,
+                    font=dict(size=10, color='#00f5ff', family='monospace'),
+                    bgcolor='rgba(0,0,0,0.5)',
+                    bordercolor='#00f5ff',
+                    borderwidth=1,
+                    borderpad=4
+                )
             ]
         )
-        fig.update_traces(hovertemplate='<b>%{data.name}</b><br>Date: %{x|%Y-%m}<br>Value: %{y:,}<br><extra></extra>')
+        
+        # Update hover template for futuristic look
+        fig.update_traces(
+            hovertemplate='<b>%{data.name}</b><br>' +
+                          'Date: %{x|%Y-%m}<br>' +
+                          'Value: %{y:,}<br>' +
+                          '<extra></extra>'
+        )
+        
         return fig
+        
     except Exception as e:
-        st.error(f"⚠️ Graph Generation Error: {str(e}")
+        st.error(f"⚠️ Graph Generation Error: {str(e)}")
         return None
 
 # =====================================
-# TAB CONTENT FUNCTIONS (PRESERVED LOGIC)
+# TAB CONTENT FUNCTIONS - ALL EXPLANATIONS PRESERVED
 # =====================================
 def render_home():
     st.title("🛡️ CYBER THREAT INTELLIGENCE")
@@ -393,9 +607,11 @@ def render_home():
     
     st.divider()
 
+    # 1. EXECUTION: Get Prediction & Accuracy Immediately
     try:
         prediction = predict_2027()
         accuracy = get_model_accuracy() * 100
+        # Get all results for algorithm selection
         all_results = get_results()
     except Exception as e:
         st.error(f"⚠️ System Error: {e}")
@@ -403,25 +619,32 @@ def render_home():
         accuracy = 0.0
         all_results = {}
 
+    # Determine best algorithm(s) - those at 100% or highest accuracy
     if all_results:
         max_acc = max(all_results.values())
-        if max_acc >= 0.999:
+        # If max is 1.0 (100%), get all that achieved 100%, else get the highest one(s)
+        if max_acc >= 0.999:  # Using 0.999 to handle floating point precision
             best_algorithms = [name for name, acc in all_results.items() if acc >= 0.999]
             best_acc_pct = 100.0
         else:
             best_algorithms = [name for name, acc in all_results.items() if acc == max_acc]
             best_acc_pct = max_acc * 100
     else:
-        best_algorithms = ["XGBoost"]
+        best_algorithms = ["XGBoost"]  # Fallback
         best_acc_pct = accuracy
 
+    # Format algorithm display name
     if len(best_algorithms) == 1:
         algo_display = best_algorithms[0].upper().replace(" ", "_")
+        algo_short = best_algorithms[0]
     elif len(best_algorithms) == 2:
         algo_display = "ENSEMBLE_DUAL"
+        algo_short = " + ".join(best_algorithms)
     else:
         algo_display = "ENSEMBLE_TRIPLE"
+        algo_short = "ALL_SYSTEMS"
 
+    # 2. OUTCOME: Display Threat Projection FIRST (Top Priority)
     st.header("🚨 THREAT PROJECTION // 2027")
     
     if prediction == "High":
@@ -429,69 +652,82 @@ def render_home():
         <div class="threat-high">
             <h1>⚠️ HIGH RISK DETECTED</h1>
             <h3>THREAT_LEVEL: HIGH</h3>
-            <p>Predictive algorithms indicate significant escalation in cyber threats targeting critical infrastructure. Immediate countermeasures required.</p>
+            <p>Predictive algorithms indicate significant escalation in cyber threats targeting critical infrastructure. Immediate countermeasures required. Threat vectors include advanced persistent threats (APTs) and zero-day exploits.</p>
         </div>
         """, unsafe_allow_html=True)
-        st.warning("⚠️ **Interpretation**: Historical data shows that when attack volumes exceed thresholds, threat levels typically spike to HIGH.")
+        st.warning("⚠️ **Interpretation**: Historical data shows that when attack volumes exceed 4,000 (DDoS), 18,000 (Malware), and economic pressure indicators are elevated, threat levels typically spike to HIGH. Review defensive protocols immediately.")
         
     elif prediction == "Critical":
         st.markdown("""
         <div class="threat-critical">
             <h1>🛑 CRITICAL ALERT</h1>
             <h3>THREAT_LEVEL: CRITICAL</h3>
-            <p>Maximum threat level detected. System predicts unprecedented attack surge. Emergency protocols activated.</p>
+            <p>Maximum threat level detected. System predicts unprecedented attack surge. Emergency protocols activated. All defensive systems should be raised to maximum alert status immediately.</p>
         </div>
         """, unsafe_allow_html=True)
-        st.error("🛑 **Interpretation**: The convergence of high CVE counts and economic instability historically correlates with CRITICAL threat periods.")
+        st.error("🛑 **Interpretation**: The convergence of high CVE counts (95), low patch compliance (9 days delay), and economic instability historically correlates with CRITICAL threat periods. Immediate executive action required.")
         
     else:
         st.markdown("""
         <div class="threat-moderate">
             <h1>✅ STABLE STATUS</h1>
             <h3>THREAT_LEVEL: MODERATE</h3>
-            <p>Threat parameters within acceptable ranges. Standard monitoring protocols sufficient.</p>
+            <p>Threat parameters within acceptable ranges. Standard monitoring protocols sufficient. Continue baseline security operations and routine system audits.</p>
         </div>
         """, unsafe_allow_html=True)
-        st.success("✅ **Interpretation**: Current projections indicate manageable threat levels.")
+        st.success("✅ **Interpretation**: Current projections indicate manageable threat levels. Attack volumes remain within historical norms and economic indicators suggest stable conditions. Maintain standard operations.")
 
     st.divider()
 
+    # 3. FUTURISTIC GRAPH: Visual Data Intelligence
     st.markdown("### 📡 THREAT VISUALIZATION MATRIX")
     
+    # Show current data source for the graph
     current_source = get_current_data_source()
     if current_source == "uploaded":
         st.info("📊 Displaying **Uploaded Dataset** Visualization")
     else:
         st.info("📊 Displaying **Default Dataset** Visualization")
     
+    # Get current dataset for visualization
     viz_data = get_dataset()
     
+    # Create and display the futuristic graph with unique key based on data source
     fig = create_futuristic_graph(viz_data)
     if fig is not None:
+        # KEY FIX: Add unique key based on data source and data shape to force re-render
         chart_key = f"threat_graph_{current_source}_{len(viz_data)}"
         st.plotly_chart(fig, use_container_width=True, height=600, key=chart_key)
     
+    # Graph explanation
     with st.expander("📖 **Graph Interpretation Guide**", expanded=False):
         st.markdown("""
         **🔍 Understanding the Visualization:**
         
         **Top Panel - Attack Vectors:**
-        - **Cyan Line (◆)**: DDoS Attacks
-        - **Magenta Line (●)**: Malware Infections  
-        - **Green Line (▲)**: Phishing Attempts
-        - **Orange Line (■)**: Web Attacks
+        - **Cyan Line (◆)**: DDoS Attacks - Distributed denial of service incidents
+        - **Magenta Line (●)**: Malware Infections - Virus/Trojan/Ransomware detections  
+        - **Green Line (▲)**: Phishing Attempts - Social engineering attacks
+        - **Orange Line (■)**: Web Attacks - SQL injection, XSS, application exploits
         
         **Bottom Panel - Vulnerability Metrics:**
-        - **Red Bars**: Critical CVEs
-        - **Gold Line (×)**: Patch Delay Days
+        - **Red Bars**: Critical CVEs published each month (security vulnerabilities)
+        - **Gold Line (×)**: Patch Delay Days (time to deploy security fixes)
         
         **Key Patterns to Watch:**
         - **Spikes in red bars** + **high gold line** = Critical vulnerability window
-        - **Rising cyan/magenta** = Active attack campaign
+        - **Rising cyan/magenta** = Active attack campaign in progress
+        - **All lines trending up** = Approaching CRITICAL threat level
+        
+        **Interactive Features:**
+        - Hover over any point for exact values
+        - Click legend items to show/hide specific attack types
+        - Drag to zoom into specific time periods
         """)
     
     st.divider()
 
+    # 4. CONTEXT: System Metrics & Algorithm Info (Secondary Priority)
     st.markdown("### 📡 THREAT ASSESSMENT MODULE")
     
     if st.session_state.mobile_view:
@@ -501,45 +737,66 @@ def render_home():
         c1, c2, c3 = st.columns(3)
 
     with c1:
+        # Dynamic algorithm display based on 100% performers
         if len(best_algorithms) == 1:
             algo_name = best_algorithms[0]
             algo_code = algo_name.upper().replace(" ", "_")
             subtitle = "ML.Engine.Active" if "XGBoost" in algo_name else "Statistical.Engine.Active"
+            
+            # Single algorithm explanation
+            if "XGBoost" in algo_name:
+                desc = "eXtreme Gradient Boosting | Advanced ensemble decision trees with superior pattern recognition"
+            elif "Random Forest" in algo_name:
+                desc = "Random Forest Classifier | Bagging ensemble method reducing overfitting through multiple decision trees"
+            elif "Logistic Regression" in algo_name:
+                desc = "Logistic Regression | Linear statistical model providing high interpretability and baseline performance"
+            else:
+                desc = "Machine Learning Engine"
+                
         elif len(best_algorithms) == 2:
             algo_code = "DUAL_ENSEMBLE"
+            algo_name = " + ".join(best_algorithms)
             subtitle = "Hybrid.Engine.Active"
+            desc = f"Combined {best_algorithms[0]} & {best_algorithms[1]} | Hybrid approach leveraging multiple algorithmic strengths"
         else:
             algo_code = "TRIPLE_ENSEMBLE"
+            algo_name = "ALL_SYSTEMS"
             subtitle = "Meta.Ensemble.Active"
+            desc = "Full Algorithmic Consensus | All three models achieving perfect accuracy - maximum reliability mode"
         
         st.markdown(f"""
         <div class="tech-container" style="text-align: center;">
-            <h4 style="color: #94a3b8; margin:15px 0 0 0; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 2px; font-family: Inter, sans-serif;">Core Algorithm</h4>
-            <h2 style="margin: 20px 0; color: #06b6d4; font-family: JetBrains Mono, monospace !important; font-size: 2.0rem; font-weight: 700; text-shadow: 0 0 15px rgba(6,182,212,0.5);">{algo_code}</h2>
+            <h4 style="color: #94a3b8; margin:15px 0 0 0; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 2px; font-family: Inter, sans-serif;">Core Algorithm {'(s)' if len(best_algorithms) > 1 else ''}</h4>
+            <h2 style="margin: 20px 0; color: #06b6d4; font-family: JetBrains Mono, monospace !important; font-size: {'2.0rem' if len(best_algorithms) > 1 else '2.6rem'}; font-weight: 700; text-shadow: 0 0 15px rgba(6,182,212,0.5);">{algo_code}</h2>
             <p style="color: #64748b; font-size: 0.95rem; font-family: Calibri, sans-serif; margin-bottom: 15px;">{subtitle}</p>
         </div>
         """, unsafe_allow_html=True)
         
+        # Dynamic explanation based on which algorithm(s) won
         if len(best_algorithms) == 1:
             if "XGBoost" in best_algorithms[0]:
-                st.caption("💡 **XGBoost** uses gradient boosting to combine weak learners into a strong predictor.")
+                st.caption("💡 **XGBoost** uses gradient boosting to combine weak learners into a strong predictor. Excels at capturing non-linear relationships in cybersecurity data and handles imbalanced datasets effectively.")
             elif "Random Forest" in best_algorithms[0]:
-                st.caption("💡 **Random Forest** builds multiple decision trees and merges their predictions.")
+                st.caption("💡 **Random Forest** builds multiple decision trees and merges their predictions. Reduces overfitting through bagging and provides robust performance across varied threat patterns.")
             elif "Logistic Regression" in best_algorithms[0]:
-                st.caption("💡 **Logistic Regression** provides a linear probabilistic approach.")
+                st.caption("💡 **Logistic Regression** provides a linear probabilistic approach. While simpler than ensemble methods, it offers high interpretability and efficient computation for real-time predictions.")
         elif len(best_algorithms) == 2:
-            st.caption(f"💡 **Dual Algorithm Mode**: Both {best_algorithms[0]} and {best_algorithms[1]} achieved optimal performance.")
+            st.caption(f"💡 **Dual Algorithm Mode**: Both {best_algorithms[0]} and {best_algorithms[1]} achieved optimal performance. The system leverages complementary strengths - ensemble diversity meets statistical rigor.")
         else:
-            st.caption("💡 **Triple Consensus Mode**: All three algorithms achieved 100% accuracy.")
+            st.caption("💡 **Triple Consensus Mode**: All three algorithms achieved 100% accuracy on validation data. This rare state indicates extremely clear patterns in your dataset, providing maximum confidence in predictions.")
 
     with c2:
-        st.metric("🎯 MODEL ACCURACY", f"{best_acc_pct:.2f}%", help="Training validation score")
+        st.metric(
+            "🎯 MODEL ACCURACY",
+            f"{best_acc_pct:.2f}%",
+            help="Training validation score"
+        )
         if best_acc_pct >= 99.9:
-            st.caption("🌟 **PERFECT SCORE**: Optimal prediction reliability achieved.")
+            st.caption("🌟 **PERFECT SCORE**: Optimal prediction reliability achieved. The model(s) correctly classified all validation samples.")
         elif best_acc_pct >= 90:
-            st.caption("✅ **HIGH RELIABILITY**: Strong predictive performance.")
+            st.caption("✅ **HIGH RELIABILITY**: Strong predictive performance suitable for operational deployment.")
         else:
-            st.caption("⚠️ **MODERATE RELIABILITY**: Consider uploading more historical data.")
+            st.caption("⚠️ **MODERATE RELIABILITY**: Consider uploading more historical data to improve accuracy.")
 
     with c3:
         st.markdown("""
@@ -549,15 +806,18 @@ def render_home():
             <p style="color: #64748b; font-size: 0.95rem; font-family: Calibri, sans-serif; margin-bottom: 15px;">Forecast.Horizon</p>
         </div>
         """, unsafe_allow_html=True)
-        st.caption("💡 The model projects threat levels 2 years ahead using trend analysis.")
+        st.caption("💡 The model projects threat levels 2 years ahead using trend analysis of attack patterns, economic indicators, and system vulnerabilities from historical data.")
 
     st.divider()
 
+    # 4. EDUCATION: Dynamic Methodology Based on Data Source
     st.markdown("### 🧠 **Prediction Methodology**")
     
+    # Determine current data context
     data_source = get_current_data_source()
     is_custom_data = (data_source == "uploaded")
     
+    # Get model performance metrics to tailor the explanation
     try:
         all_results = get_results()
         if all_results:
@@ -571,30 +831,60 @@ def render_home():
         best_algorithms = []
         best_acc_pct = 0.0
 
+    # Dynamic Content Generation
     if is_custom_data:
-        st.warning("⚠️ **Custom Dataset Detected**: The methodology below reflects patterns learned from your **uploaded data**.")
+        st.warning("⚠️ **Custom Dataset Detected**: The methodology below reflects patterns learned from your **uploaded data** rather than the default research dataset.")
         st.info(f"""
         **Adaptive Learning Protocol Active**
         
-        The system has analyzed your uploaded dataset. 
+        The system has analyzed your uploaded dataset containing {len(get_dataset())} historical records. 
         Based on the data characteristics, the system selected **{', '.join(best_algorithms) if best_algorithms else 'No Model'}** as the optimal predictor.
         
         **Key Findings from Your Data:**
-        - **Pattern Recognition**: The model identified specific correlations between your input variables and threat outcomes.
-        - **Validation Performance**: The model achieved **{best_acc_pct:.2f}% accuracy** on validation data.
+        - **Pattern Recognition**: The model identified specific correlations between your input variables (e.g., economic indicators, attack volumes) and threat outcomes.
+        - **Validation Performance**: The model achieved **{best_acc_pct:.2f}% accuracy** on validation data, indicating how well it generalizes to unseen scenarios.
+        - **Risk Factors**: Your data suggests that specific combinations of parameters (likely involving CVE counts and patch delays) are strong predictors of elevated threat levels.
+        
+        **Methodology**: The system uses **Empirical Risk Minimization** on your specific dataset, optimizing the selected algorithm's hyperparameters to minimize prediction error on your historical records.
         """)
     else:
-        st.info("""
-        **How the 2027 Prediction is Generated:**
-        
-        1. **Data Input**: The model receives projected values for 12 parameters.
-        2. **Pattern Recognition**: The system compares these projections against historical patterns.
-        3. **Classification**: The system classifies the 2027 scenario into one of three categories.
-        4. **Confidence**: The accuracy metric indicates how much trust to place in this prediction.
-        
-        **Why This Matters**: Early warning allows security teams to allocate resources proactively.
-        """)
+        # Default Dataset Logic (Original Behavior with Dynamic Algorithm Selection)
+        if best_algorithms and len(best_algorithms) == 1 and "Logistic Regression" in best_algorithms[0]:
+            st.info("""
+            **How the 2027 Prediction is Generated (Logistic Regression Mode):**
+            
+            1. **Linear Classification**: The model calculates probability scores for each threat level (Medium/High/Critical) using weighted linear combinations of input features
+            2. **Sigmoid Activation**: Probabilities are passed through a logistic function to ensure outputs fall between 0 and 1
+            3. **Decision Boundary**: The class with highest probability above threshold (0.5) is selected as the prediction
+            4. **Interpretability**: Coefficients reveal which factors most influence threat levels (e.g., positive weight on CVE count increases Critical probability)
+            
+            **Why This Matters**: While less complex than ensemble methods, logistic regression provides transparent, auditable predictions crucial for government security decisions.
+            """)
+        elif best_algorithms and len(best_algorithms) == 1 and "Random Forest" in best_algorithms[0]:
+            st.info("""
+            **How the 2027 Prediction is Generated (Random Forest Mode):**
+            
+            1. **Ensemble Voting**: 200 decision trees independently analyze the 2027 parameters and vote on threat classification
+            2. **Bootstrap Aggregation**: Each tree trains on random subsets of historical data, ensuring robustness against outliers
+            3. **Feature Randomness**: At each split, only random subsets of features are considered, forcing diversity in tree structures
+            4. **Majority Rule**: The threat level receiving the most votes across all trees becomes the final prediction
+            
+            **Why This Matters**: Random Forest reduces overfitting risks inherent in single decision trees while maintaining interpretability through feature importance rankings.
+            """)
+        else:
+            # Default to XGBoost or Ensemble explanation
+            st.info("""
+            **How the 2027 Prediction is Generated:**
+            
+            1. **Data Input**: The model receives projected values for 12 parameters (DDoS attacks, malware volume, CVE counts, inflation, GDP, etc.)
+            2. **Pattern Recognition**: The system compares these projections against historical patterns where similar conditions resulted in specific threat levels
+            3. **Classification**: The system classifies the 2027 scenario into one of three categories: Moderate, High, or Critical
+            4. **Confidence**: The accuracy metric indicates how much trust to place in this prediction based on past performance
+            
+            **Why This Matters**: Early warning allows security teams to allocate resources proactively rather than reacting to attacks after they occur.
+            """)
 
+    # EXPLANATION: What this page shows
     with st.expander("📖 **How to Read This Dashboard**", expanded=False):
         st.markdown("""
         **Welcome to the Cyber Threat Intelligence System.** This dashboard predicts cyber threat levels for Kenyan Government Digital Services using Machine Learning.
@@ -602,9 +892,12 @@ def render_home():
         **Key Components:**
         - **🎯 Model Accuracy**: Shows how well our AI predicts past threats (higher % = more reliable)
         - **📅 Target Year**: The system forecasts threats for **2027** based on historical patterns (2020-2025)
-        - **🚨 Threat Projection**: The colored alert box shows the predicted threat level.
+        - **🚨 Threat Projection**: The colored alert box shows the predicted threat level using three categories:
+            - **MODERATE** (Green): Normal operations sufficient
+            - **HIGH** (Orange): Increased vigilance required
+            - **CRITICAL** (Red): Maximum alert status needed
         
-        **How it Works**: The system analyzes historical data points across 12 variables to identify patterns and predict future threats.
+        **How it Works**: The system analyzes historical data points across 12 variables (attack types, economic factors, vulnerabilities) to identify patterns and predict future threats.
         
         **📤 Upload Your Own Data**: Go to the **DATA UPLOAD** tab to use your own historical data for custom predictions!
         """)
@@ -615,6 +908,7 @@ def render_data_upload():
     
     st.divider()
     
+    # STEP 1: Download Template
     st.header("📋 STEP 1: Download Template")
     
     st.markdown("""
@@ -639,6 +933,7 @@ def render_data_upload():
     | **Threat_Level** | Text | Historical threat level | Medium, High, Critical |
     """)
     
+    # Generate and provide download button for template
     template_buffer = generate_excel_template()
     
     col1, col2, col3 = st.columns([1, 2, 1])
@@ -654,6 +949,7 @@ def render_data_upload():
     
     st.divider()
     
+    # STEP 2: Upload Data
     st.header("📤 STEP 2: Upload Your Data")
     
     st.markdown("""
@@ -677,6 +973,7 @@ def render_data_upload():
     if uploaded_file is not None:
         st.success(f"✅ File uploaded: **{uploaded_file.name}**")
         
+        # Preview uploaded data
         try:
             if uploaded_file.name.endswith('.csv'):
                 df_preview = pd.read_csv(uploaded_file)
@@ -686,11 +983,13 @@ def render_data_upload():
             st.markdown("### 👁️ **Data Preview** (First 5 rows)")
             st.dataframe(df_preview.head(), use_container_width=True)
             
+            # Validate data
             validation_result = validate_uploaded_data(df_preview)
             
             if validation_result['valid']:
                 st.success(f"✅ **Validation Passed**: {validation_result['message']}")
                 
+                # Train button
                 if st.button("🚀 TRAIN MODEL WITH UPLOADED DATA", use_container_width=True, type="primary"):
                     with st.spinner("Training models... Please wait..."):
                         success, message = train_on_uploaded_data(df_preview)
@@ -700,6 +999,7 @@ def render_data_upload():
                             st.success(f"✅ {message}")
                             st.balloons()
                             st.info("🔄 Navigate to **HOME** tab to see updated graph with your data!")
+                            # Force page rerun to refresh graph with new data
                             st.rerun()
                         else:
                             st.session_state.training_status = "error"
@@ -714,20 +1014,24 @@ def render_data_upload():
     
     st.divider()
     
+    # Reset option
     st.header("🔄 Reset to Default")
     if st.button("↩️ RETURN TO DEFAULT DATASET", use_container_width=True):
         st.session_state.uploaded_data = None
+        # Reinitialize with default data
         train_on_uploaded_data(None)
         st.success("✅ System reset to default dataset")
         st.info("The system is now using the original 2020-2025 research data.")
+        # Force page rerun to refresh graph
         st.rerun()
 
 def render_overview():
     st.title("📄 SYSTEM OVERVIEW")
     
+    # EXPLANATION: Project context
     st.markdown("""
     ### 🎓 **Research Context**
-    This system was developed as part of an **MSc Cybersecurity thesis** to address a critical gap: most security systems react to attacks after they happen, but this tool **predicts threats before they occur**.
+    This system was developed as part of an **MSc Cybersecurity thesis at Mount Kenya University** to address a critical gap: most security systems react to attacks after they happen, but this tool **predicts threats before they occur**.
     
     **The Problem**: Kenyan Government Digital Services face increasing cyber attacks, but traditional defenses only respond after damage occurs. This creates vulnerability windows.
     
@@ -773,6 +1077,7 @@ def render_overview():
             Critical infrastructure requires predictive capabilities to stay ahead of adversaries.
             """)
             
+            # EXPLANATION: Why ML works here
             st.info("""
             **Why Machine Learning?**
             
@@ -809,13 +1114,16 @@ def render_overview():
 def render_dataset():
     st.title("📊 DATA MATRIX")
     
+    # Get current dataset for analysis
     current_df = get_dataset()
     
+    # Show current data source
     if get_current_data_source() == "uploaded":
         st.success("📊 **Currently Displaying**: Your uploaded custom dataset")
     else:
         st.info("📊 **Currently Displaying**: Default research dataset (2020-2025)")
     
+    # EXPLANATION: What the data represents
     st.markdown("""
     ### 📖 **Understanding the Training Data**
     
@@ -833,15 +1141,24 @@ def render_dataset():
     st.markdown("Accessing training datasets...")
     
     height = 400 if st.session_state.mobile_view else 500
-    st.dataframe(current_df, use_container_width=True, height=height)
+    st.dataframe(
+        current_df,
+        use_container_width=True,
+        height=height
+    )
     
+    # DYNAMIC PATTERN ANALYSIS
     st.markdown("---")
     st.subheader("📈 **Key Patterns Visible in This Data**")
     
+    # Analyze actual patterns in the current dataset
     patterns = analyze_dataset_patterns(current_df)
+    
+    # Display each pattern as a bullet point
     for pattern in patterns:
         st.markdown(f"• {pattern}")
     
+    # Additional dataset statistics
     st.markdown("---")
     st.subheader("📊 **Dataset Statistics**")
     
@@ -866,8 +1183,10 @@ def render_dataset():
 def render_models():
     st.title("🤖 AI CORE PERFORMANCE")
     
+    # Get results to determine winners
     results = get_results()
     
+    # Determine active algorithms (100% or highest)
     if results:
         max_acc = max(results.values())
         if max_acc >= 0.999:
@@ -880,6 +1199,7 @@ def render_models():
         active_algorithms = ["XGBoost"]
         active_acc = 0.0
     
+    # Show current data source
     if get_current_data_source() == "uploaded":
         st.success("🤖 **Models trained on**: Your uploaded custom dataset")
     else:
@@ -887,6 +1207,7 @@ def render_models():
     
     st.markdown("---")
     
+    # DISPLAY ACTIVE/WINNING ALGORITHMS SECTION
     if len(active_algorithms) == 1:
         winner_name = active_algorithms[0]
         st.header(f"🏆 ACTIVE ALGORITHM: {winner_name.upper()}")
@@ -962,7 +1283,7 @@ def render_models():
         **Best For**: Critical applications requiring maximum reliability through algorithmic diversity
         """)
         
-    else:
+    else:  # All three
         st.header(f"🏆 TRIPLE CONSENSUS MODE")
         st.success("""
         ### 🥇 ALL SYSTEMS ACTIVE: Logistic Regression + Random Forest + XGBoost
@@ -983,6 +1304,7 @@ def render_models():
     
     st.markdown("---")
     
+    # EXPLANATION: Algorithm comparison table
     st.markdown("### 📊 **Complete Algorithm Benchmarking**")
     
     table_data = []
@@ -997,6 +1319,7 @@ def render_models():
     
     st.table(table_data)
     
+    # EXPLANATION: Results interpretation
     st.markdown("### 📖 **Understanding the Results**")
     
     col1, col2 = st.columns(2)
@@ -1036,6 +1359,7 @@ def render_models():
 def render_parameters():
     st.title("⚙️ SYSTEM PARAMETERS")
     
+    # Get current prediction for context
     try:
         current_prediction = predict_2027()
         params_df = get_parameters()
@@ -1043,18 +1367,11 @@ def render_parameters():
         current_prediction = "Unknown"
         params_df = get_parameters()
     
-    prediction_text = "Unknown"
-    if current_prediction == "Medium":
-        prediction_text = "🟢 **MODERATE**"
-    elif current_prediction == "High":
-        prediction_text = "🟠 **HIGH**"
-    elif current_prediction == "Critical":
-        prediction_text = "🔴 **CRITICAL**"
-    
+    # EXPLANATION: Parameters meaning with context
     st.markdown(f"""
     ### 📖 **2027 Projection Parameters**
     
-    **Current Prediction for 2027**: {prediction_text}
+    **Current Prediction for 2027**: {'🟢 **MODERATE**' if current_prediction == 'Medium' else '🟠 **HIGH**' if current_prediction == 'High' else '🔴 **CRITICAL**' if current_prediction == 'Critical' else '⚪ **Unknown**'}
     
     These values represent **projected conditions for August 2027** based on trend analysis, economic forecasts, and technological growth projections. 
     The model uses these 12 inputs to classify the threat level.
@@ -1071,25 +1388,34 @@ def render_parameters():
     st.markdown("### 📋 **Feature Configuration for 2027 Threat Projection**")
     
     height = 300 if st.session_state.mobile_view else 400
-    st.dataframe(params_df, use_container_width=True, height=height)
+    st.dataframe(
+        params_df,
+        use_container_width=True,
+        height=height
+    )
     
+    # DATA-SPECIFIC PARAMETER ANALYSIS
     st.markdown("---")
-    st.subheader("🔍 **Why These Parameters Lead to " + (current_prediction if current_prediction != "Unknown" else "This Prediction") + "**")
+    st.subheader("🔍 **Why These Parameters Lead to {}**".format(current_prediction if current_prediction != "Unknown" else "This Prediction"))
     
+    # Get current dataset for comparison
     analysis_df = get_dataset()
     
     if not analysis_df.empty and current_prediction != "Unknown":
+        # Analyze how 2027 params compare to historical data
         ddos_2027 = 4200
         malware_2027 = 18500
         cve_2027 = 95
         patch_2027 = 9
         
+        # Compare to historical ranges
         ddos_max = analysis_df['DDoS_Attacks'].max() if 'DDoS_Attacks' in analysis_df.columns else 0
         ddos_mean = analysis_df['DDoS_Attacks'].mean() if 'DDoS_Attacks' in analysis_df.columns else 0
         malware_max = analysis_df['Malware_Attacks'].max() if 'Malware_Attacks' in analysis_df.columns else 0
         cve_max = analysis_df['Critical_CVEs'].max() if 'Critical_CVEs' in analysis_df.columns else 0
         patch_min = analysis_df['Patch_Delay_Days'].min() if 'Patch_Delay_Days' in analysis_df.columns else 20
         
+        # Find historical periods with similar conditions
         similar_periods = analysis_df[
             (analysis_df['DDoS_Attacks'] > ddos_2027 * 0.8) & 
             (analysis_df['Critical_CVEs'] > cve_2027 * 0.8)
@@ -1106,6 +1432,7 @@ def render_parameters():
             This historical correlation strongly influences the **{current_prediction}** prediction.
             """)
         
+        # Parameter-specific insights
         insights = []
         
         if ddos_2027 > ddos_max * 0.9:
@@ -1121,6 +1448,7 @@ def render_parameters():
         elif patch_2027 > 10:
             insights.append(f"• **Patch Delay ({patch_2027} days)** exceeds 10-day threshold, creating vulnerability windows")
         
+        # Economic context
         econ_2027 = "Stable"
         high_cost_periods = analysis_df[analysis_df['Economic_Environment'] == 'High_Cost']
         if not high_cost_periods.empty:
@@ -1133,6 +1461,7 @@ def render_parameters():
             for insight in insights:
                 st.markdown(insight)
     
+    # EXPLANATION: Parameter significance
     st.markdown("---")
     st.subheader("⚠️ **Parameter Significance Analysis**")
     
@@ -1151,6 +1480,7 @@ def render_parameters():
     **Custom Data Impact**: When you upload your own data, the model learns different patterns and may weight these factors differently based on your specific threat landscape!
     """)
     
+    # Context-specific recommendation
     if current_prediction == "Critical":
         st.error("🚨 **CRITICAL RECOMMENDATION**: Given the projected parameters exceed multiple historical thresholds simultaneously, immediate executive review of security posture is advised.")
     elif current_prediction == "High":
@@ -1159,82 +1489,22 @@ def render_parameters():
         st.success("✅ **STABLE OUTLOOK**: Projected parameters suggest manageable risk levels. Maintain standard monitoring and continue current security investments.")
 
 # =====================================
-# MAIN RENDERING WITH FIXED NAVIGATION
+# MAIN RENDERING BASED ON ACTIVE TAB
 # =====================================
+tab_functions = {
+    "home": render_home,
+    "data_upload": render_data_upload,
+    "overview": render_overview,
+    "dataset": render_dataset,
+    "models": render_models,
+    "parameters": render_parameters
+}
 
-# Create the fixed navigation bar using a container
-nav_container = st.container()
-
-with nav_container:
-    # Create columns for the fixed header
-    col_logo, col_title, col_nav = st.columns([1, 3, 6])
-    
-    with col_logo:
-        # Logo placeholder
-        st.markdown("### 🛡️")
-    
-    with col_title:
-        st.markdown('<span style="color: #06b6d4; font-size: 1.5rem; font-weight: 700; text-shadow: 0 0 10px rgba(6, 182, 212, 0.5);">CYBER THREAT INTELLIGENCE</span>', unsafe_allow_html=True)
-    
-    with col_nav:
-        # Navigation tabs using Streamlit native tabs - THIS IS CLICKABLE AND FIXED
-        tab_options = {
-            "home": "🏠 HOME",
-            "data_upload": "📤 DATA UPLOAD", 
-            "overview": "📄 PROJECT OVERVIEW",
-            "dataset": "📊 DATASET",
-            "models": "🤖 AI MODELS",
-            "parameters": "⚙️ PARAMETERS"
-        }
-        
-        # Use Streamlit tabs for navigation - they stay fixed at top
-        selected_tab = st.tabs(list(tab_options.values))
-        
-        # Map tab selection to function
-        tab_mapping = {
-            "🏠 HOME": "home",
-            "📤 DATA UPLOAD": "data_upload",
-            "📄 PROJECT OVERVIEW": "overview",
-            "📊 DATASET": "dataset",
-            "🤖 AI MODELS": "models",
-            "⚙️ PARAMETERS": "parameters"
-        }
-        
-        # This is a placeholder - actual rendering happens below
-        pass
-
-# Render content based on session state (controlled by tabs)
-# Note: We use a workaround since st.tabs cannot directly control session state for routing
-# Instead, we use the fact that st.tabs will render the content inside them
-# But to keep your existing function structure, we'll use a different approach:
-
-# Actually, let's use the st.tabs properly to wrap the content
-tab_home, tab_upload, tab_overview, tab_dataset, tab_models, tab_params = st.tabs([
-    "🏠 HOME",
-    "📤 DATA UPLOAD",
-    "📄 PROJECT OVERVIEW",
-    "📊 DATASET",
-    "🤖 AI MODELS",
-    "⚙️ PARAMETERS"
-])
-
-with tab_home:
+active_tab = st.session_state.active_tab
+if active_tab in tab_functions:
+    tab_functions[active_tab]()
+else:
     render_home()
-
-with tab_upload:
-    render_data_upload()
-
-with tab_overview:
-    render_overview()
-
-with tab_dataset:
-    render_dataset()
-
-with tab_models:
-    render_models()
-
-with tab_params:
-    render_parameters()
 
 # =====================================
 # FOOTER - DYNAMIC YEAR
@@ -1243,7 +1513,7 @@ st.divider()
 st.markdown(f"""
 <div style="text-align: center; color: #64748b; padding: 20px;">
     <p style="margin: 0; font-size: 0.875rem;">
-        🛡️ CYBER THREAT INTELLIGENCE | © {current_year} RESEARCH PROJECT
+        🛡️ MKU Cyber Threat Intelligence | © {current_year} Mount Kenya University
     </p>
     <p style="margin: 8px 0 0 0; font-size: 0.75rem;">
         Data source: {get_current_data_source()} | Built with Streamlit
