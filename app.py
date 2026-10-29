@@ -3,9 +3,11 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 import pandas as pd
 import io
+import re
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import numpy as np
+from pathlib import Path
 
 # Import from your local model module
 from cyber_threat_model import (
@@ -25,7 +27,7 @@ from cyber_threat_model import (
 # =====================================
 st.set_page_config(
     page_title="Cyber Threat Intelligence Platform",
-    page_icon="cti_mark.svg",
+    page_icon=str(Path(__file__).with_name("cti_mark.svg")),
     layout="wide",
     initial_sidebar_state="collapsed"
 )
@@ -255,7 +257,7 @@ with st.sidebar:
 if st.session_state.dark_mode:
     theme_css = """
     <style>
-        .stApp { --app-text: #e7edf2; --app-muted: #aebbc5; --app-panel: #18232d; --app-input-bg: #121b23; --watermark-line: #9bb4c0; --brand-accent: #6b9aad; background: #101820; color: var(--app-text); }
+        .stApp { --app-text: #e7edf2; --app-muted: #aebbc5; --app-panel: #18232d; --app-input-bg: #121b23; --watermark-line: #9bb4c0; --watermark-sweep: rgba(155,180,192,.65); --watermark-label: #9bb4c0; --watermark-logo-opacity: .13; --watermark-label-opacity: .22; --brand-accent: #6b9aad; background: #101820; color: var(--app-text); }
         .stApp, .stApp p, .stApp li, .stApp label, .stApp [data-testid="stMarkdownContainer"], .stApp [data-testid="stWidgetLabel"] { color: var(--app-text); }
         .stApp small, .stApp .stCaption, .stApp [data-testid="stCaptionContainer"] { color: var(--app-muted) !important; }
         .stApp input, .stApp textarea, .stApp [data-baseweb="select"] > div, .stApp [data-baseweb="input"] > div { background-color: var(--app-input-bg) !important; color: #e7edf2 !important; border-color: #536674 !important; }
@@ -291,7 +293,7 @@ if st.session_state.dark_mode:
 else:
     theme_css = """
     <style>
-        .stApp { --app-text: #202b33; --app-muted: #596a75; --app-panel: #ffffff; --app-input-bg: #ffffff; --watermark-line: #8ca2ad; --brand-accent: #527d8d; background: #f4f6f7; color: var(--app-text); }
+        .stApp { --app-text: #202b33; --app-muted: #596a75; --app-panel: #ffffff; --app-input-bg: #ffffff; --watermark-line: #527d8d; --watermark-sweep: rgba(49,89,107,.42); --watermark-label: #31596b; --watermark-logo-opacity: .19; --watermark-label-opacity: .30; --brand-accent: #527d8d; background: #f4f6f7; color: var(--app-text); }
         .stApp, .stApp p, .stApp li, .stApp label, .stApp [data-testid="stMarkdownContainer"], .stApp [data-testid="stWidgetLabel"] { color: var(--app-text); }
         .stApp small, .stApp .stCaption, .stApp [data-testid="stCaptionContainer"] { color: var(--app-muted) !important; }
         .stApp input, .stApp textarea, .stApp [data-baseweb="select"] > div, .stApp [data-baseweb="input"] > div { background-color: #ffffff !important; color: #202b33 !important; border-color: #b8c4cb !important; }
@@ -332,29 +334,34 @@ contrast_css = f"""
 <style>
 
     .live-watermark {{
-        position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden;
-        display: grid; place-items: center; opacity: .055;
+        position: fixed; inset: 68px 0 0 0; z-index: 0; pointer-events: none; overflow: hidden;
+        display: grid; place-items: center; isolation: isolate;
     }}
     .live-watermark::before {{
-        content: ""; width: min(72vw, 760px); aspect-ratio: 1; border-radius: 50%;
-        border: 1px solid var(--watermark-line, #9bb4c0);
-        background: conic-gradient(from 0deg, transparent 0deg 300deg, rgba(155,180,192,.65) 328deg, transparent 342deg), repeating-radial-gradient(circle, transparent 0 54px, var(--watermark-line, #9bb4c0) 55px 56px, transparent 57px 94px);
+        content: ""; position: absolute; width: min(76vw, 820px); aspect-ratio: 1; border-radius: 50%;
+        border: 1px solid var(--watermark-line, #9bb4c0); opacity: .44;
+        background: conic-gradient(from 0deg, transparent 0deg 300deg, var(--watermark-sweep, rgba(107,154,173,.45)) 328deg, transparent 342deg),
+                    repeating-radial-gradient(circle, transparent 0 54px, var(--watermark-line, #9bb4c0) 55px 56px, transparent 57px 94px);
         box-shadow: inset 0 0 0 34px transparent, inset 0 0 0 35px var(--watermark-line, #9bb4c0);
-        animation: watermark-sweep 36s linear infinite;
+        animation: watermark-sweep 42s linear infinite;
     }}
-    .live-watermark::after {{
-        content: "CTI  /  LIVE SIGNAL MONITOR"; position: absolute; top: 50%; left: 50%;
-        transform: translate(-50%, -50%) rotate(-18deg); white-space: nowrap;
-        font: 700 clamp(1.1rem, 3.5vw, 3rem)/1.2 Arial, sans-serif; letter-spacing: .18em;
-        color: var(--watermark-line, #9bb4c0); border-top: 1px solid currentColor; border-bottom: 1px solid currentColor;
-        padding: .45em 1.1em;
+    .watermark-logo {{
+        position: absolute; width: min(42vw, 430px); min-width: 230px; height: auto;
+        opacity: var(--watermark-logo-opacity, .15); filter: none;
+    }}
+    .watermark-logo svg {{ width: 100%; height: auto; display: block; }}
+    .watermark-label {{
+        position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-18deg);
+        white-space: nowrap; font: 700 clamp(1rem, 3vw, 2.6rem)/1.2 Arial, sans-serif;
+        letter-spacing: .15em; color: var(--watermark-label, #9bb4c0);
+        border-top: 1px solid currentColor; border-bottom: 1px solid currentColor;
+        padding: .45em 1.1em; opacity: var(--watermark-label-opacity, .24);
     }}
     @keyframes watermark-sweep {{ from {{ transform: rotate(0deg); }} to {{ transform: rotate(360deg); }} }}
-    .stApp {{ --watermark-line: #b6c7d0; }}
     .stApp [data-testid="stAppViewContainer"], .stApp [data-testid="stHeader"] {{ position: relative; }}
     /* Do not create a stacking context above the fixed navigation. This keeps
        the navigation's high z-index effective and the tabs clickable. */
-    .stApp [data-testid="stMainBlockContainer"] {{ position: relative; z-index: auto !important; }}
+    .stApp [data-testid="stMainBlockContainer"] {{ position: relative; z-index: 1 !important; }}
     .st-key-top_nav, .st-key-top_nav * {{ pointer-events: auto; }}
     .st-key-top_nav {{ backdrop-filter: blur(10px); }}
     .st-key-top_nav [role="radiogroup"] label {{ border-radius: 5px !important; }}
@@ -378,13 +385,55 @@ contrast_css = f"""
     .stApp [data-testid="stAlert"] p, .stApp [data-testid="stAlert"] span {{ color: inherit; }}
     .stApp [data-testid="stRadio"] label, .stApp [data-testid="stCheckbox"] label, .stApp [data-testid="stToggle"] label {{ opacity: 1 !important; }}
     .stApp button {{ font-weight: 600; }}
+    /* Make native Streamlit tabs and segmented controls readable in both themes. */
+    .stApp [data-baseweb="tab-list"] {{ gap: .35rem; border-bottom: 1px solid var(--brand-accent, #527d8d); }}
+    .stApp [data-baseweb="tab"], .stApp [role="tab"] {{
+        color: var(--app-text, #202b33) !important; opacity: 1 !important; font-weight: 650 !important;
+        background: var(--app-panel, #fff) !important; border: 1px solid #8a9ba5 !important;
+        border-bottom: 3px solid transparent !important; border-radius: 6px 6px 0 0 !important;
+        padding: .55rem .9rem !important;
+    }}
+    .stApp [data-baseweb="tab"] *, .stApp [role="tab"] * {{ color: var(--app-text, #202b33) !important; opacity: 1 !important; }}
+    .stApp [aria-selected="true"][role="tab"] {{ border-bottom-color: var(--brand-accent, #527d8d) !important; background: var(--app-input-bg, #fff) !important; }}
+    .stApp [data-baseweb="tab-highlight"] {{ background-color: var(--brand-accent, #527d8d) !important; }}
+    .stApp [data-testid="stSegmentedControl"] button {{ color: var(--app-text, #202b33) !important; opacity: 1 !important; }}
+
+    /* A restrained ECG pulse makes elevated projections noticeable without rapid flashing. */
+    .threat-high, .threat-critical, .threat-moderate {{
+        position: relative; overflow: hidden; isolation: isolate; border-radius: 10px;
+        padding: 1.15rem 1.3rem; margin: .65rem 0 1rem; border-width: 1px; border-style: solid;
+    }}
+    .threat-high h1, .threat-critical h1, .threat-moderate h1 {{ border: 0; padding: 0; margin-top: 0; }}
+    .threat-high p, .threat-high h1, .threat-high h3, .threat-critical p, .threat-critical h1, .threat-critical h3,
+    .threat-moderate p, .threat-moderate h1, .threat-moderate h3 {{ color: inherit !important; position: relative; z-index: 2; }}
+    .threat-pulse {{ animation: threat-heartbeat 1.8s ease-in-out infinite; }}
+    .threat-high.threat-pulse {{ --pulse-rgb: 190, 145, 58; }}
+    .threat-critical.threat-pulse {{ --pulse-rgb: 190, 70, 78; }}
+    .ecg-wave {{ position: absolute; right: 1.2rem; bottom: .5rem; width: min(34%, 270px); height: 44px;
+        fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+        opacity: .72; z-index: 1; pointer-events: none; stroke-dasharray: 300; animation: ecg-trace 2.4s linear infinite; }}
+    @keyframes threat-heartbeat {{
+        0%, 100% {{ box-shadow: 0 0 0 0 rgba(var(--pulse-rgb), .08); }}
+        13% {{ box-shadow: 0 0 0 3px rgba(var(--pulse-rgb), .18), 0 0 18px rgba(var(--pulse-rgb), .14); }}
+        23% {{ box-shadow: 0 0 0 1px rgba(var(--pulse-rgb), .08); }}
+        35% {{ box-shadow: 0 0 0 4px rgba(var(--pulse-rgb), .13), 0 0 24px rgba(var(--pulse-rgb), .10); }}
+        48% {{ box-shadow: 0 0 0 0 rgba(var(--pulse-rgb), .04); }}
+    }}
+    @keyframes ecg-trace {{ from {{ stroke-dashoffset: 300; }} to {{ stroke-dashoffset: 0; }} }}
+
     /* Restrained motion: small transitions, with accessibility support. */
     .stApp [data-testid="stMetric"], .stApp [data-testid="stDataFrame"],
     .stApp [data-testid="stTable"], .stApp button {{
         transition: border-color .2s ease, box-shadow .2s ease, transform .2s ease;
     }}
     .stApp button:hover {{ transform: translateY(-1px); }}
+    @media (max-width: 700px) {{
+        .watermark-logo {{ width: min(66vw, 360px); min-width: 190px; }}
+        .watermark-label {{ letter-spacing: .08em; font-size: clamp(.8rem, 3vw, 1.4rem); }}
+        .ecg-wave {{ width: 45%; opacity: .5; }}
+    }}
     @media (prefers-reduced-motion: reduce) {{
+        .threat-pulse, .ecg-wave, .live-watermark::before {{ animation: none !important; }}
         .stApp *, .st-key-top_nav, [data-testid="stSidebar"] {{
             animation: none !important; transition: none !important; scroll-behavior: auto !important;
         }}
@@ -392,7 +441,18 @@ contrast_css = f"""
 </style>
 """
 st.markdown(theme_css + contrast_css, unsafe_allow_html=True)
-st.markdown('<div class="live-watermark" aria-hidden="true"></div>', unsafe_allow_html=True)
+# Reuse the browser favicon artwork as the large watermark emblem so the visual identity matches.
+try:
+    watermark_svg = Path(__file__).with_name("cti_mark.svg").read_text(encoding="utf-8")
+    # The favicon's rounded-square background is omitted in the watermark to avoid a dark tile in light mode.
+    watermark_svg = re.sub(r'<rect[^>]*/>', '', watermark_svg, count=1)
+except (OSError, NameError):
+    watermark_svg = ""
+st.markdown(
+    f'<div class="live-watermark" aria-hidden="true"><div class="watermark-logo">{watermark_svg}</div>'
+    '<div class="watermark-label">CTI / LIVE SIGNAL MONITOR</div></div>',
+    unsafe_allow_html=True
+)
 
 # =====================================
 # HELPER FUNCTION TO ANALYZE DATA PATTERNS
@@ -764,7 +824,8 @@ def render_home():
     
     if prediction == "High":
         st.markdown("""
-        <div class="threat-high">
+        <div class="threat-high threat-pulse">
+            <svg class="ecg-wave" viewBox="0 0 240 44" aria-hidden="true"><path d="M0 23 H45 L57 23 L69 13 L80 34 L94 4 L108 30 L119 23 H240"/></svg>
             <h1><svg class="status-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 22 20H2L12 3Z"/><path d="M12 9v5M12 17h.01"/></svg>HIGH RISK DETECTED</h1>
             <h3>THREAT_LEVEL: HIGH</h3>
             <p>Predictive algorithms indicate significant escalation in cyber threats targeting critical infrastructure. Immediate countermeasures required. Threat vectors include advanced persistent threats (APTs) and zero-day exploits.</p>
@@ -774,7 +835,8 @@ def render_home():
         
     elif prediction == "Critical":
         st.markdown("""
-        <div class="threat-critical">
+        <div class="threat-critical threat-pulse">
+            <svg class="ecg-wave" viewBox="0 0 240 44" aria-hidden="true"><path d="M0 23 H45 L57 23 L69 13 L80 34 L94 4 L108 30 L119 23 H240"/></svg>
             <h1><svg class="status-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m9 9 6 6m0-6-6 6"/></svg>CRITICAL ALERT</h1>
             <h3>THREAT_LEVEL: CRITICAL</h3>
             <p>Maximum threat level detected. System predicts unprecedented attack surge. Emergency protocols activated. All defensive systems should be raised to maximum alert status immediately.</p>
