@@ -36,7 +36,7 @@ if 'training_status' not in st.session_state:
     st.session_state.training_status = None
 
 if 'active_tab' not in st.session_state:
-    st.session_state.active_tab = "home"
+    st.session_state.active_tab = "🏠 HOME"
 
 # =====================================
 # PAGE CONFIG
@@ -49,7 +49,7 @@ st.set_page_config(
 )
 
 # =====================================
-# CUSTOM CSS - FIXED NAVIGATION BAR & HAMBURGER
+# CUSTOM CSS - FIXED NAVIGATION BAR
 # =====================================
 nav_css = """
 <style>
@@ -102,7 +102,6 @@ nav_css = """
         height: 2.5px;
         background: white;
         border-radius: 2px;
-        transition: all 0.3s ease;
     }
     
     /* Nav Title */
@@ -115,34 +114,36 @@ nav_css = """
         font-family: 'Inter', sans-serif;
     }
     
-    /* Nav Buttons Container */
-    .nav-buttons {
-        display: flex;
-        gap: 6px;
-        align-items: center;
-        flex-wrap: wrap;
+    /* Push content below nav */
+    .main .block-container {
+        padding-top: 80px !important;
     }
     
-    /* Flashy Nav Button */
-    .nav-btn {
-        padding: 8px 14px;
-        border-radius: 8px;
-        border: 1px solid rgba(6, 182, 212, 0.3);
+    /* Sidebar styling */
+    [data-testid="stSidebar"] {
+        background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%) !important;
+    }
+    
+    /* Hide default radio button circles for nav */
+    div[data-testid="stRadio"] > div {
+        flex-direction: row !important;
+        gap: 6px !important;
+    }
+    
+    div[data-testid="stRadio"] label {
         background: linear-gradient(135deg, rgba(6, 182, 212, 0.1), rgba(59, 130, 246, 0.1));
+        border: 1px solid rgba(6, 182, 212, 0.3);
+        border-radius: 8px;
+        padding: 8px 14px;
         color: #94a3b8;
         font-size: 0.78rem;
         font-weight: 600;
         cursor: pointer;
         transition: all 0.3s ease;
-        text-decoration: none;
-        display: inline-flex;
-        align-items: center;
-        gap: 5px;
-        white-space: nowrap;
-        font-family: 'Inter', sans-serif;
+        margin: 0 !important;
     }
     
-    .nav-btn:hover {
+    div[data-testid="stRadio"] label:hover {
         background: linear-gradient(135deg, rgba(6, 182, 212, 0.3), rgba(59, 130, 246, 0.3));
         color: #06b6d4;
         border-color: #06b6d4;
@@ -150,10 +151,19 @@ nav_css = """
         box-shadow: 0 4px 15px rgba(6, 182, 212, 0.4);
     }
     
-    .nav-btn.active {
-        background: linear-gradient(135deg, #06b6d4, #3b82f6);
-        color: white;
-        border-color: #06b6d4;
+    div[data-testid="stRadio"] label[data-baseweb="radio"] > div:first-child {
+        display: none !important;
+    }
+    
+    div[data-testid="stRadio"] label[data-baseweb="radio"] > div:nth-child(2) {
+        margin-left: 0 !important;
+    }
+    
+    /* Active/selected state */
+    div[data-testid="stRadio"] label[data-baseweb="radio"]:has(input:checked) {
+        background: linear-gradient(135deg, #06b6d4, #3b82f6) !important;
+        color: white !important;
+        border-color: #06b6d4 !important;
         box-shadow: 0 0 20px rgba(6, 182, 212, 0.6);
         animation: pulse 2s infinite;
     }
@@ -163,19 +173,8 @@ nav_css = """
         50% { box-shadow: 0 0 30px rgba(6, 182, 212, 0.9); }
     }
     
-    /* Push content below nav */
-    .main .block-container {
-        padding-top: 80px !important;
-    }
-    
-    /* Sidebar styling */
-    .css-1d391kg, [data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%) !important;
-    }
-    
     /* Mobile responsive */
     @media (max-width: 768px) {
-        .nav-buttons { display: none; }
         .nav-title { font-size: 0.85rem; }
     }
 </style>
@@ -184,43 +183,50 @@ nav_css = """
 st.markdown(nav_css, unsafe_allow_html=True)
 
 # =====================================
-# FIXED NAVIGATION BAR RENDERING
+# FIXED NAVIGATION BAR WITH WORKING BUTTONS
 # =====================================
 def render_nav_bar():
-    """Render the fixed navigation bar with hamburger and buttons"""
+    """Render the fixed navigation bar with hamburger and working tab selector"""
     
-    tabs = {
-        "home": "🏠 HOME",
-        "data_upload": "📤 DATA UPLOAD",
-        "overview": "📄 PROJECT OVERVIEW",
-        "dataset": "📊 DATASET",
-        "models": "🤖 AI MODELS",
-        "parameters": "⚙️ PARAMETERS"
-    }
+    # Create columns for layout
+    col_ham, col_title, col_nav = st.columns([1, 3, 8])
     
-    buttons_html = ""
-    for tab_key, tab_label in tabs.items():
-        active_class = "active" if st.session_state.active_tab == tab_key else ""
-        buttons_html += f'<button class="nav-btn {active_class}" onclick="window.parent.postMessage({{type: \'streamlit:setComponentValue\', value: \'{tab_key}\'}}, \'*\')">{tab_label}</button>'
+    with col_ham:
+        # Hamburger button to open sidebar
+        if st.button("☰", key="hamburger_btn", help="System Controls", 
+                    type="primary", use_container_width=True):
+            # Toggle sidebar by setting a query param or using JS
+            st.markdown("""
+            <script>
+                var sidebar = parent.document.querySelector('[data-testid="stSidebar"]');
+                if (sidebar) {
+                    var button = sidebar.querySelector('button[kind="header"]');
+                    if (button) button.click();
+                }
+            </script>
+            """, unsafe_allow_html=True)
     
-    nav_html = f"""
-    <div class="nav-container">
-        <div style="display: flex; align-items: center;">
-            <button class="hamburger-btn" onclick="window.parent.postMessage({{type: 'streamlit:setComponentValue', value: 'toggle_sidebar'}}, '*')" title="System Controls">
-                <div class="hamburger-line"></div>
-                <div class="hamburger-line"></div>
-                <div class="hamburger-line"></div>
-            </button>
-            <span class="nav-title">🛡️ MKU CYBER THREAT INTELLIGENCE</span>
-        </div>
-        <div class="nav-buttons">
-            {buttons_html}
-        </div>
-    </div>
-    """
-    st.markdown(nav_html, unsafe_allow_html=True)
-
-render_nav_bar()
+    with col_title:
+        st.markdown('<span style="color: #06b6d4; font-size: 1.1rem; font-weight: 700; text-shadow: 0 0 10px rgba(6, 182, 212, 0.5);">🛡️ MKU CYBER THREAT INTELLIGENCE</span>', unsafe_allow_html=True)
+    
+    with col_nav:
+        # Use radio buttons styled as nav buttons
+        tab_options = ["🏠 HOME", "📤 DATA UPLOAD", "📄 PROJECT OVERVIEW", "📊 DATASET", "🤖 AI MODELS", "⚙️ PARAMETERS"]
+        
+        # Horizontal radio for navigation
+        selected_tab = st.radio(
+            "Navigation",
+            tab_options,
+            index=tab_options.index(st.session_state.active_tab) if st.session_state.active_tab in tab_options else 0,
+            horizontal=True,
+            label_visibility="collapsed",
+            key="nav_radio"
+        )
+        
+        # Update active tab if changed
+        if selected_tab != st.session_state.active_tab:
+            st.session_state.active_tab = selected_tab
+            st.rerun()
 
 # =====================================
 # SIDEBAR CONTROLS (Opened via Hamburger)
@@ -348,14 +354,9 @@ else:
 st.markdown(theme_css + mobile_css, unsafe_allow_html=True)
 
 # =====================================
-# NAVIGATION STATE MANAGEMENT
+# RENDER NAVIGATION BAR
 # =====================================
-query_params = st.query_params
-if "tab" in query_params:
-    selected_tab = query_params["tab"]
-    if selected_tab in ["home", "data_upload", "overview", "dataset", "models", "parameters"]:
-        st.session_state.active_tab = selected_tab
-        st.query_params.clear()
+render_nav_bar()
 
 # =====================================
 # HELPER FUNCTIONS
@@ -527,10 +528,6 @@ def render_home():
     else:
         best_algorithms = ["XGBoost"]
         best_acc_pct = accuracy
-
-    top_course_data = pd.DataFrame()  # Placeholder
-    top_course = "N/A"
-    top_course_val = 0
 
     st.header("🚨 THREAT PROJECTION // 2027")
     
@@ -1188,12 +1185,12 @@ def render_parameters():
 # MAIN RENDERING BASED ON ACTIVE TAB
 # =====================================
 tab_functions = {
-    "home": render_home,
-    "data_upload": render_data_upload,
-    "overview": render_overview,
-    "dataset": render_dataset,
-    "models": render_models,
-    "parameters": render_parameters
+    "🏠 HOME": render_home,
+    "📤 DATA UPLOAD": render_data_upload,
+    "📄 PROJECT OVERVIEW": render_overview,
+    "📊 DATASET": render_dataset,
+    "🤖 AI MODELS": render_models,
+    "⚙️ PARAMETERS": render_parameters
 }
 
 active_tab = st.session_state.active_tab
