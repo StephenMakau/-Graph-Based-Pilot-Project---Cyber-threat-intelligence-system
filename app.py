@@ -35,6 +35,12 @@ if 'uploaded_data' not in st.session_state:
 if 'training_status' not in st.session_state:
     st.session_state.training_status = None
 
+if 'active_tab' not in st.session_state:
+    st.session_state.active_tab = "🏠 HOME"
+
+# Get current year from browser/system
+current_year = datetime.now().year
+
 # =====================================
 # PAGE CONFIG
 # =====================================
@@ -42,14 +48,201 @@ st.set_page_config(
     page_title="MKU Cyber Threat Intelligence",
     page_icon="🛡️",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="collapsed"
 )
 
 # =====================================
-# SIDEBAR CONTROLS
+# CUSTOM CSS - FIXED NAVIGATION BAR & HAMBURGER
+# =====================================
+nav_css = f"""
+<style>
+    /* Hide default Streamlit elements */
+    #MainMenu {{visibility: hidden;}}
+    header {{visibility: hidden;}}
+    footer {{visibility: hidden;}}
+    
+    /* Hide default sidebar toggle button completely */
+    button[kind="header"] {{
+        display: none !important;
+    }}
+    
+    /* Fixed Navigation Bar at very top */
+    .nav-container {{
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 60px;
+        background: linear-gradient(90deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
+        border-bottom: 2px solid #06b6d4;
+        z-index: 999999;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 20px;
+        box-shadow: 0 4px 20px rgba(6, 182, 212, 0.3);
+    }}
+    
+    /* Hamburger Button - 3 stacked lines */
+    .hamburger-btn {{
+        width: 42px;
+        height: 42px;
+        background: linear-gradient(135deg, #06b6d4, #3b82f6);
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 5px;
+        transition: all 0.3s ease;
+        box-shadow: 0 0 15px rgba(6, 182, 212, 0.5);
+    }}
+    
+    .hamburger-btn:hover {{
+        transform: scale(1.1);
+        box-shadow: 0 0 25px rgba(6, 182, 212, 0.8);
+    }}
+    
+    .hamburger-line {{
+        width: 22px;
+        height: 2.5px;
+        background: white;
+        border-radius: 2px;
+        transition: all 0.3s ease;
+    }}
+    
+    /* Nav Title */
+    .nav-title {{
+        color: #06b6d4;
+        font-size: 1.1rem;
+        font-weight: 700;
+        text-shadow: 0 0 10px rgba(6, 182, 212, 0.5);
+        margin-left: 15px;
+    }}
+    
+    /* Nav Buttons Container */
+    .nav-buttons {{
+        display: flex;
+        gap: 6px;
+        align-items: center;
+        flex-wrap: wrap;
+    }}
+    
+    /* Flashy Nav Button */
+    .nav-btn {{
+        padding: 8px 14px;
+        border-radius: 8px;
+        border: 1px solid rgba(6, 182, 212, 0.3);
+        background: linear-gradient(135deg, rgba(6, 182, 212, 0.1), rgba(59, 130, 246, 0.1));
+        color: #94a3b8;
+        font-size: 0.78rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        white-space: nowrap;
+    }}
+    
+    .nav-btn:hover {{
+        background: linear-gradient(135deg, rgba(6, 182, 212, 0.3), rgba(59, 130, 246, 0.3));
+        color: #06b6d4;
+        border-color: #06b6d4;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 15px rgba(6, 182, 212, 0.4);
+    }}
+    
+    .nav-btn.active {{
+        background: linear-gradient(135deg, #06b6d4, #3b82f6);
+        color: white;
+        border-color: #06b6d4;
+        box-shadow: 0 0 20px rgba(6, 182, 212, 0.6);
+        animation: pulse 2s infinite;
+    }}
+    
+    @keyframes pulse {{
+        0%, 100% {{ box-shadow: 0 0 20px rgba(6, 182, 212, 0.6); }}
+        50% {{ box-shadow: 0 0 30px rgba(6, 182, 212, 0.9); }}
+    }}
+    
+    /* Push content below nav */
+    .main .block-container {{
+        padding-top: 80px !important;
+    }}
+    
+    /* Sidebar styling */
+    [data-testid="stSidebar"] {{
+        background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%) !important;
+    }}
+    
+    /* Mobile responsive */
+    @media (max-width: 768px) {{
+        .nav-buttons {{ display: none; }}
+        .nav-title {{ font-size: 0.85rem; }}
+    }}
+</style>
+"""
+
+st.markdown(nav_css, unsafe_allow_html=True)
+
+# =====================================
+# FIXED NAVIGATION BAR RENDERING
+# =====================================
+def render_nav_bar():
+    """Render the fixed navigation bar with hamburger and buttons"""
+    
+    tabs = {
+        "home": "🏠 HOME",
+        "data_upload": "📤 DATA UPLOAD",
+        "overview": "📄 PROJECT OVERVIEW",
+        "dataset": "📊 DATASET",
+        "models": "🤖 AI MODELS",
+        "parameters": "⚙️ PARAMETERS"
+    }
+    
+    buttons_html = ""
+    for tab_key, tab_label in tabs.items():
+        active_class = "active" if st.session_state.active_tab == tab_key else ""
+        buttons_html += f'<button class="nav-btn {active_class}" onclick="window.parent.postMessage({{type: \'streamlit:setComponentValue\', value: \'{tab_key}\'}}, \'*\')">{tab_label}</button>'
+    
+    nav_html = f"""
+    <div class="nav-container">
+        <div style="display: flex; align-items: center;">
+            <button class="hamburger-btn" onclick="window.parent.postMessage({{type: 'streamlit:setComponentValue', value: 'toggle_sidebar'}}, '*')" title="System Controls">
+                <div class="hamburger-line"></div>
+                <div class="hamburger-line"></div>
+                <div class="hamburger-line"></div>
+            </button>
+            <span class="nav-title">🛡️ MKU CYBER THREAT INTELLIGENCE</span>
+        </div>
+        <div class="nav-buttons">
+            {buttons_html}
+        </div>
+    </div>
+    """
+    st.markdown(nav_html, unsafe_allow_html=True)
+
+render_nav_bar()
+
+# =====================================
+# SIDEBAR CONTROLS (Opened via Hamburger)
 # =====================================
 with st.sidebar:
-    st.title("⚙️ SYSTEM CONTROLS")
+    st.markdown("""
+    <div style="text-align: center; margin: 20px 0;">
+        <div style="display: inline-block; padding: 15px; background: linear-gradient(135deg, #06b6d4, #3b82f6); border-radius: 12px; box-shadow: 0 0 20px rgba(6, 182, 212, 0.5);">
+            <div style="width: 30px; height: 3px; background: white; margin: 5px 0; border-radius: 2px;"></div>
+            <div style="width: 30px; height: 3px; background: white; margin: 5px 0; border-radius: 2px;"></div>
+            <div style="width: 30px; height: 3px; background: white; margin: 5px 0; border-radius: 2px;"></div>
+        </div>
+        <p style="color: #06b6d4; font-size: 0.9rem; margin-top: 12px; font-weight: 600;">⚙️ SYSTEM CONTROLS</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
     st.markdown("---")
     
     dark_mode = st.toggle(
@@ -68,7 +261,6 @@ with st.sidebar:
     
     st.markdown("---")
     
-    # Data Source Indicator
     data_source = get_current_data_source()
     if data_source == "uploaded":
         st.success("📊 Using: **Uploaded Data**")
@@ -76,7 +268,6 @@ with st.sidebar:
         st.info("📊 Using: **Default Dataset**")
     
     st.caption(f"System Time: {datetime.now(ZoneInfo('Africa/Nairobi')).strftime('%H:%M:%S')}")
-    st.caption("MKU Cybersecurity v2.0.8")
 
 # =====================================
 # THEME CSS
@@ -160,6 +351,16 @@ else:
     """
 
 st.markdown(theme_css + mobile_css, unsafe_allow_html=True)
+
+# =====================================
+# NAVIGATION STATE MANAGEMENT
+# =====================================
+query_params = st.query_params
+if "tab" in query_params:
+    selected_tab = query_params["tab"]
+    if selected_tab in ["home", "data_upload", "overview", "dataset", "models", "parameters"]:
+        st.session_state.active_tab = selected_tab
+        st.query_params.clear()
 
 # =====================================
 # HELPER FUNCTION TO ANALYZE DATA PATTERNS
@@ -469,25 +670,10 @@ def create_futuristic_graph(df):
         return None
 
 # =====================================
-# NAVIGATION
+# TAB CONTENT FUNCTIONS - ALL EXPLANATIONS PRESERVED
 # =====================================
-home, data_upload, overview, dataset, models, parameters = st.tabs(
-    [
-        "🏠 HOME",
-        "📤 DATA UPLOAD",
-        "📄 PROJECT OVERVIEW", 
-        "📊 DATASET",
-        "🤖 AI MODELS",
-        "⚙️ PARAMETERS"
-    ]
-)
-
-# =====================================
-# HOME - PRIORITY: OUTCOME FIRST
-# =====================================
-with home:
+def render_home():
     st.title("🛡️ CYBER THREAT INTELLIGENCE")
-    # REMOVED: SYSTEM v2.0.8 line
     st.markdown("**Operator:** Stephen Musau Makau | **Clearance:** MSc Cybersecurity")
     
     mode_indicator = "🌙 DARK" if st.session_state.dark_mode else "☀️ LIGHT"
@@ -792,10 +978,7 @@ with home:
         **📤 Upload Your Own Data**: Go to the **DATA UPLOAD** tab to use your own historical data for custom predictions!
         """)
 
-# =====================================
-# DATA UPLOAD - NEW TAB
-# =====================================
-with data_upload:
+def render_data_upload():
     st.title("📤 DATA UPLOAD CENTER")
     st.markdown("**Upload your own cybersecurity data to generate custom threat predictions**")
     
@@ -918,10 +1101,7 @@ with data_upload:
         # Force page rerun to refresh graph
         st.rerun()
 
-# =====================================
-# PROJECT OVERVIEW - WITH EXPLANATIONS
-# =====================================
-with overview:
+def render_overview():
     st.title("📄 SYSTEM OVERVIEW")
     
     # EXPLANATION: Project context
@@ -1007,10 +1187,7 @@ with overview:
 
     st.info("🔒 **SECURITY PROTOCOL**: All data displayed is synthetic/anonymized for research purposes. No real-time government data is exposed.")
 
-# =====================================
-# DATASET - WITH DYNAMIC PATTERN ANALYSIS
-# =====================================
-with dataset:
+def render_dataset():
     st.title("📊 DATA MATRIX")
     
     # Get current dataset for analysis
@@ -1079,10 +1256,7 @@ with dataset:
     
     st.info("💡 **Tip**: Upload your own data in the **DATA UPLOAD** tab to see patterns specific to your organization!")
 
-# =====================================
-# AI MODELS - WITH DYNAMIC WINNER DISPLAY
-# =====================================
-with models:
+def render_models():
     st.title("🤖 AI CORE PERFORMANCE")
     
     # Get results to determine winners
@@ -1258,10 +1432,7 @@ with models:
         The best algorithm depends on your specific data patterns.
         """)
 
-# =====================================
-# PARAMETERS - WITH DATA-SPECIFIC INSIGHTS
-# =====================================
-with parameters:
+def render_parameters():
     st.title("⚙️ SYSTEM PARAMETERS")
     
     # Get current prediction for context
@@ -1392,3 +1563,36 @@ with parameters:
         st.warning("⚠️ **HIGH ALERT RECOMMENDATION**: Review defensive protocols and ensure patch management can maintain the projected 9-day deployment window.")
     else:
         st.success("✅ **STABLE OUTLOOK**: Projected parameters suggest manageable risk levels. Maintain standard monitoring and continue current security investments.")
+
+# =====================================
+# MAIN RENDERING BASED ON ACTIVE TAB
+# =====================================
+tab_functions = {
+    "🏠 HOME": render_home,
+    "📤 DATA UPLOAD": render_data_upload,
+    "📄 PROJECT OVERVIEW": render_overview,
+    "📊 DATASET": render_dataset,
+    "🤖 AI MODELS": render_models,
+    "⚙️ PARAMETERS": render_parameters
+}
+
+active_tab = st.session_state.active_tab
+if active_tab in tab_functions:
+    tab_functions[active_tab]()
+else:
+    render_home()
+
+# =====================================
+# FOOTER - DYNAMIC YEAR
+# =====================================
+st.divider()
+st.markdown(f"""
+<div style="text-align: center; color: #64748b; padding: 20px;">
+    <p style="margin: 0; font-size: 0.875rem;">
+        🛡️ MKU Cyber Threat Intelligence | © {current_year} Mount Kenya University
+    </p>
+    <p style="margin: 8px 0 0 0; font-size: 0.75rem;">
+        Data source: {get_current_data_source()} | Built with Streamlit
+    </p>
+</div>
+""", unsafe_allow_html=True)
