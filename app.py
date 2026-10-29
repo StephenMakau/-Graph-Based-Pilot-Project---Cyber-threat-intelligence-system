@@ -21,6 +21,16 @@ from cyber_threat_model import (
 )
 
 # =====================================
+# PAGE CONFIG
+# =====================================
+st.set_page_config(
+    page_title="Cyber Threat Intelligence Platform",
+    page_icon="🛡️",
+    layout="wide",
+    initial_sidebar_state="collapsed"
+)
+
+# =====================================
 # SESSION STATE INITIALIZATION
 # =====================================
 if 'dark_mode' not in st.session_state:
@@ -28,6 +38,9 @@ if 'dark_mode' not in st.session_state:
     
 if 'mobile_view' not in st.session_state:
     st.session_state.mobile_view = False
+
+if 'controls_open' not in st.session_state:
+    st.session_state.controls_open = False
 
 if 'uploaded_data' not in st.session_state:
     st.session_state.uploaded_data = None
@@ -42,157 +55,154 @@ if 'active_tab' not in st.session_state:
 current_year = datetime.now().year
 
 # =====================================
-# PAGE CONFIG
+# FIXED TOP NAVIGATION + FULL-HEIGHT SYSTEM CONTROLS
 # =====================================
-st.set_page_config(
-    page_title="CYBER THREAT INTELLIGENCE",
-    page_icon="🛡️",
-    layout="wide",
-    initial_sidebar_state="expanded" # Sidebar starts open for controls
-)
-
-# =====================================
-# CUSTOM CSS - FIXED NAVIGATION & FUTURISTIC UI
-# =====================================
+# Streamlit reruns the script after each interaction. The keyed container gives
+# the navigation a stable CSS target, so it remains fixed while page content scrolls.
+sidebar_transform = "translateX(0)" if st.session_state.controls_open else "translateX(-105%)"
 nav_css = f"""
 <style>
-    /* Hide default Streamlit elements */
-    #MainMenu {{visibility: hidden;}}
-    header {{visibility: hidden;}}
-    footer {{visibility: hidden;}}
-    
-    /* Hide default sidebar toggle button completely */
-    button[kind="header"] {{
-        display: none !important;
-    }}
-    
-    /* FUTURISTIC THEME VARIABLES */
-    :root {
-        --neon-cyan: #06b6d4;
-        --neon-purple: #8b5cf6;
-        --neon-blue: #3b82f6;
-        --dark-bg: #0f172a;
-        --dark-surface: #1e293b;
-        --text-primary: #f8fafc;
-        --text-secondary: #94a3b8;
-    }}
+    #MainMenu, footer {{ visibility: hidden; }}
+    header {{ visibility: visible; }}
+    [data-testid="stHeader"] {{ background: transparent; }}
+    [data-testid="stToolbar"] {{ visibility: hidden; height: 0; }}
+    .main .block-container {{ padding-top: 92px !important; }}
 
-    /* FIXED NAVIGATION BAR CONTAINER */
-    .fixed-nav-container {{
+    .st-key-top_nav {{
         position: fixed;
         top: 0;
         left: 0;
         right: 0;
-        height: 70px;
-        background: rgba(15, 23, 42, 0.95);
-        backdrop-filter: blur(10px);
-        border-bottom: 1px solid rgba(6, 182, 212, 0.2);
-        z-index: 999999;
-        display: flex;
+        z-index: 1000000;
+        min-height: 68px;
+        padding: 8px 18px 6px;
+        background: linear-gradient(100deg, #0b1220 0%, #17243a 55%, #0b1220 100%);
+        border-bottom: 1px solid rgba(34, 211, 238, .65);
+        box-shadow: 0 8px 28px rgba(0, 0, 0, .24);
+    }}
+    .st-key-top_nav [data-testid="stHorizontalBlock"] {{
         align-items: center;
-        justify-content: space-between;
-        padding: 0 20px;
-        box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
+        gap: .6rem;
     }}
-    
-    /* Push content below nav */
-    .main .block-container {{
-        padding-top: 90px !important;
-        padding-bottom: 20px;
+    .st-key-top_nav [data-testid="stRadio"] > label {{ display: none; }}
+    .st-key-top_nav [role="radiogroup"] {{
+        display: flex;
+        flex-wrap: nowrap;
+        gap: .18rem;
+        overflow-x: auto;
+        scrollbar-width: none;
     }}
-    
-    /* Sidebar styling for Controls */
+    .st-key-top_nav [role="radiogroup"] label {{
+        white-space: nowrap;
+        border: 1px solid rgba(148, 163, 184, .20);
+        border-radius: 8px;
+        padding: 5px 9px;
+        background: rgba(255, 255, 255, .035);
+        font-size: .78rem;
+    }}
+    .st-key-top_nav [role="radiogroup"] label:has(input:checked) {{
+        background: rgba(8, 145, 178, .28);
+        border-color: #22d3ee;
+    }}
     [data-testid="stSidebar"] {{
-        background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%) !important;
-        border-right: 1px solid rgba(6, 182, 212, 0.2);
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        bottom: 0 !important;
+        height: 100vh !important;
+        width: 320px !important;
+        min-width: 320px !important;
+        z-index: 1000001 !important;
+        background: linear-gradient(180deg, #0b1220 0%, #17243a 100%) !important;
+        border-right: 1px solid rgba(34, 211, 238, .45);
+        transform: {sidebar_transform} !important;
+        transition: transform .24s ease-in-out !important;
+        visibility: visible !important;
     }}
-    
-    /* Custom Navigation Tabs Styling */
-    .stTabs [data-testid="stTab"] {{
-        background: rgba(30, 41, 59, 0.5);
-        border: 1px solid rgba(6, 182, 212, 0.1);
-        color: #94a3b8;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-        margin-right: 5px;
-        transition: all 0.3s ease;
+    [data-testid="stSidebar"] > div:first-child {{
+        height: 100vh !important;
+        overflow-y: auto !important;
+        padding-top: 1rem;
     }}
-    
-    .stTabs [data-testid="stTab"]:hover {{
-        background: rgba(6, 182, 212, 0.1);
-        color: #06b6d4;
-        border-color: #06b6d4;
-        box-shadow: 0 0 15px rgba(6, 182, 212, 0.2);
+    [data-testid="stSidebar"] [data-testid="stSidebarContent"] {{
+        height: 100vh;
     }}
-    
-    .stTabs [data-testid="stTab"][aria-selected="true"] {{
-        background: linear-gradient(135deg, #06b6d4, #3b82f6);
-        color: #ffffff !important;
-        border-color: #06b6d4;
-        box-shadow: 0 0 20px rgba(6, 182, 212, 0.4);
-        text-shadow: 0 0 5px rgba(255,255,255,0.5);
-    }}
-    
-    /* Hide the tab list container styling that might interfere */
-    .stTabs [data-testid="stHorizontalBlock"] {{
-        justify-content: flex-start;
-        gap: 10px;
-    }}
-    
-    /* Mobile responsive */
-    @media (max-width: 768px) {{
-        .nav-title {{ font-size: 0.85rem; }}
-        .fixed-nav-container {{ padding: 0 10px; }}
+    @media (max-width: 900px) {{
+        .st-key-top_nav {{ padding: 6px 8px; }}
+        .st-key-top_nav [role="radiogroup"] label {{ font-size: .68rem; padding: 4px 6px; }}
+        .main .block-container {{ padding-top: 105px !important; }}
+        [data-testid="stSidebar"] {{ width: min(86vw, 320px) !important; min-width: min(86vw, 320px) !important; }}
     }}
 </style>
 """
-
 st.markdown(nav_css, unsafe_allow_html=True)
 
-# =====================================
-# SIDEBAR CONTROLS (SYSTEM SETTINGS)
-# =====================================
+with st.container(key="top_nav"):
+    col_ham, col_title, col_nav = st.columns([0.7, 3.0, 10.5], vertical_alignment="center")
+    with col_ham:
+        if st.button("☰", key="hamburger_btn", help="Open system controls", type="primary"):
+            st.session_state.controls_open = not st.session_state.controls_open
+            st.rerun()
+    with col_title:
+        st.markdown(
+            '<div style="color:#67e8f9;font-size:1rem;font-weight:700;letter-spacing:.04em;white-space:nowrap;">'
+            '🛡️ CYBER THREAT INTELLIGENCE</div>',
+            unsafe_allow_html=True
+        )
+    with col_nav:
+        tab_options = {
+            "home": "🏠 HOME",
+            "data_upload": "📤 DATA UPLOAD",
+            "overview": "📄 PROJECT OVERVIEW",
+            "dataset": "📊 DATASET",
+            "models": "🤖 AI MODELS",
+            "parameters": "⚙️ PARAMETERS"
+        }
+        selected_tab = st.radio(
+            "Navigation",
+            options=list(tab_options.keys()),
+            format_func=lambda x: tab_options[x],
+            index=list(tab_options.keys()).index(st.session_state.active_tab)
+                if st.session_state.active_tab in tab_options else 0,
+            horizontal=True,
+            label_visibility="collapsed",
+            key="nav_radio"
+        )
+        if selected_tab != st.session_state.active_tab:
+            st.session_state.active_tab = selected_tab
+            st.rerun()
+
+# The sidebar is a full-height control panel. Its visibility is controlled by
+# the hamburger button in the fixed top navigation.
 with st.sidebar:
-    st.markdown("""
-    <div style="text-align: center; margin: 20px 0; padding: 20px; background: rgba(6, 182, 212, 0.1); border-radius: 10px; border: 1px solid rgba(6, 182, 212, 0.2);">
-        <div style="font-size: 2rem; margin-bottom: 10px;">🛡️</div>
-        <h3 style="color: #06b6d4; margin: 0; font-family: 'JetBrains Mono', monospace;">SYSTEM CONTROL</div>
-        <p style="color: #94a3b8; font-size: 0.8rem; margin-top: 5px;">AUTHORIZED PERSONNEL ONLY</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    st.markdown("---")
-    
-    st.mark("### 🎨 DISPLAY SETTINGS")
-    dark_mode = st.toggle(
-        "🌙 Dark Mode", 
+    close_col, heading_col = st.columns([1, 5])
+    with close_col:
+        if st.button("✕", key="close_controls", help="Close system controls"):
+            st.session_state.controls_open = False
+            st.rerun()
+    with heading_col:
+        st.markdown("### ⚙️ SYSTEM CONTROLS")
+    st.caption("Appearance and display settings")
+    st.divider()
+
+    st.session_state.dark_mode = st.toggle(
+        "🌙 Dark mode",
         value=st.session_state.dark_mode,
-        help="Switch between Dark and Light theme"
+        help="Turn dark appearance on or off."
     )
-    st.session_state.dark_mode = dark_mode
-    
-    st.mark("### 📱 VIEW MODE")
-    mobile_view = st.toggle(
-        "📱 Mobile View", 
+    st.session_state.mobile_view = st.toggle(
+        "📱 Mobile phone view",
         value=st.session_state.mobile_view,
-        help="Switch between Mobile and Desktop layout"
+        help="Use a narrow, phone-sized content layout. This changes the app layout, not your device."
     )
-    st.session_state.mobile_view = mobile_view
-    
-    st.mark("---")
-    
+
+    st.divider()
     data_source = get_current_data_source()
     if data_source == "uploaded":
-        st.success("📊 STATUS: CUSTOM DATA ACTIVE")
+        st.success("📊 Using: **Uploaded Data**")
     else:
-        st.info("📊 STATUS: DEFAULT DATASET")
-    
-    st.caption(f"⏱️ SYS.TIME: {datetime.now(ZoneInfo('Africa/Nairobi')).strftime('%H:%M:%S')} EAT")
-    
-    st.mark("---")
-    st.mark("### 🔒 SECURITY PROTOCOL")
-    st.info("All interactions are logged and monitored for security purposes.")
+        st.info("📊 Using: **Default Dataset**")
+    st.caption(f"System time: {datetime.now(ZoneInfo('Africa/Nairobi')).strftime('%H:%M:%S EAT')}")
 
 # =====================================
 # THEME CSS
@@ -200,12 +210,21 @@ with st.sidebar:
 if st.session_state.dark_mode:
     theme_css = """
     <style>
-        .stApp { background: linear-gradient(135deg, #0b1120 0%, #1e293b 50%, #0f172a 100%); color: #f8fafc; }
+        .stApp { --app-text: #f8fafc; --app-muted: #cbd5e1; --app-panel: #17243a; --app-input-bg: #111c2f; background: linear-gradient(135deg, #0b1120 0%, #1e293b 50%, #0f172a 100%); color: var(--app-text); }
+        .stApp, .stApp p, .stApp li, .stApp label, .stApp [data-testid="stMarkdownContainer"], .stApp [data-testid="stWidgetLabel"] { color: var(--app-text); }
+        .stApp small, .stApp .stCaption, .stApp [data-testid="stCaptionContainer"] { color: var(--app-muted) !important; }
+        .stApp input, .stApp textarea, .stApp [data-baseweb="select"] > div, .stApp [data-baseweb="input"] > div { background-color: var(--app-input-bg) !important; color: #f8fafc !important; border-color: #64748b !important; }
+        .stApp [data-baseweb="select"] *, .stApp [data-baseweb="popover"] *, .stApp [role="option"] { color: #f8fafc !important; }
+        .stApp [data-testid="stDataFrame"], .stApp [data-testid="stTable"], .stApp [data-testid="stMetric"] { color: #f8fafc !important; }
+        .stApp [data-testid="stMetricLabel"], .stApp [data-testid="stMetricDelta"] { color: #cbd5e1 !important; }
         h1, h2, h3, h4, h5, h6 { color: #f8fafc !important; text-shadow: 0 0 20px rgba(6, 182, 212, 0.3); }
         h1 { background: linear-gradient(90deg, #06b6d4, #8b5cf6, #3b82f6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; border-bottom: 2px solid rgba(6, 182, 212, 0.3); }
         h2 { color: #06b6d4 !important; border-left: 4px solid #06b6d4; }
         h3 { color: #8b5cf6 !important; }
-        p, li, div, span, label, .stMarkdown, .stAlert { color: #e2e8f0 !important; }
+        p, li, label, .stMarkdown, .stAlert { color: #f1f5f9 !important; }
+        .stTabs [data-testid="stTab"] { color: #94a3b8; background: rgba(30, 41, 59, 0.6); border: 1px solid rgba(6, 182, 212, 0.2); }
+        .stTabs [data-testid="stTab"]:hover { color: #06b6d4; background: rgba(6, 182, 212, 0.1); }
+        .stTabs [data-testid="stTab"][aria-selected="true"] { background: linear-gradient(135deg, #06b6d4, #3b82f6); color: #ffffff !important; }
         [data-testid="stMetric"] { background: rgba(30, 41, 59, 0.7); border: 1px solid rgba(6, 182, 212, 0.3); }
         [data-testid="stMetricValue"] { color: #06b6d4 !important; }
         [data-testid="stMetricLabel"] { color: #94a3b8 !important; }
@@ -224,12 +243,21 @@ if st.session_state.dark_mode:
 else:
     theme_css = """
     <style>
-        .stApp { background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 50%, #f1f5f9 100%); color: #1e293b; }
+        .stApp { --app-text: #172033; --app-muted: #475569; --app-panel: #ffffff; --app-input-bg: #ffffff; background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 50%, #f1f5f9 100%); color: var(--app-text); }
+        .stApp, .stApp p, .stApp li, .stApp label, .stApp [data-testid="stMarkdownContainer"], .stApp [data-testid="stWidgetLabel"] { color: var(--app-text); }
+        .stApp small, .stApp .stCaption, .stApp [data-testid="stCaptionContainer"] { color: var(--app-muted) !important; }
+        .stApp input, .stApp textarea, .stApp [data-baseweb="select"] > div, .stApp [data-baseweb="input"] > div { background-color: var(--app-input-bg) !important; color: #172033 !important; border-color: #64748b !important; }
+        .stApp [data-baseweb="select"] *, .stApp [data-baseweb="popover"] *, .stApp [role="option"] { color: #172033 !important; }
+        .stApp [data-testid="stDataFrame"], .stApp [data-testid="stTable"], .stApp [data-testid="stMetric"] { color: #172033 !important; }
+        .stApp [data-testid="stMetricLabel"], .stApp [data-testid="stMetricDelta"] { color: #475569 !important; }
         h1, h2, h3, h4, h5, h6 { color: #1e293b !important; text-shadow: none; }
         h1 { background: linear-gradient(90deg, #0369a1, #7c3aed, #2563eb); -webkit-background-clip: text; -webkit-text-fill-color: transparent; border-bottom: 2px solid rgba(37, 99, 235, 0.3); }
         h2 { color: #0369a1 !important; border-left: 4px solid #0369a1; }
         h3 { color: #7c3aed !important; }
-        p, li, div, span, label, .stMarkdown, .stAlert { color: #334155 !important; }
+        p, li, label, .stMarkdown, .stAlert { color: #1e293b !important; }
+        .stTabs [data-testid="stTab"] { color: #64748b; background: rgba(255, 255, 255, 0.8); border: 1px solid rgba(37, 99, 235, 0.2); }
+        .stTabs [data-testid="stTab"]:hover { color: #0369a1; background: rgba(37, 99, 235, 0.1); }
+        .stTabs [data-testid="stTab"][aria-selected="true"] { background: linear-gradient(135deg, #0369a1, #2563eb); color: #ffffff !important; }
         [data-testid="stMetric"] { background: rgba(255, 255, 255, 0.9); border: 1px solid rgba(37, 99, 235, 0.3); box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
         [data-testid="stMetricValue"] { color: #0369a1 !important; }
         [data-testid="stMetricLabel"] { color: #64748b !important; }
@@ -269,7 +297,24 @@ else:
     </style>
     """
 
-st.markdown(theme_css + mobile_css, unsafe_allow_html=True)
+contrast_css = """
+<style>
+    /* High-contrast text: avoid blanket div/span rules that override inline card colors. */
+    .stApp [data-testid="stMarkdownContainer"] p,
+    .stApp [data-testid="stMarkdownContainer"] li,
+    .stApp [data-testid="stWidgetLabel"] p,
+    .stApp [data-testid="stCaptionContainer"] p { line-height: 1.55; }
+    .stApp [data-testid="stTextInput"] input,
+    .stApp [data-testid="stNumberInput"] input,
+    .stApp [data-testid="stTextArea"] textarea,
+    .stApp [data-testid="stDateInput"] input { opacity: 1 !important; }
+    .stApp [data-testid="stDataFrame"] *, .stApp [data-testid="stTable"] * { text-shadow: none !important; }
+    .stApp [data-testid="stAlert"] p, .stApp [data-testid="stAlert"] span { color: inherit; }
+    .stApp [data-testid="stRadio"] label, .stApp [data-testid="stCheckbox"] label, .stApp [data-testid="stToggle"] label { opacity: 1 !important; }
+    .stApp button { font-weight: 600; }
+</style>
+"""
+st.markdown(theme_css + mobile_css + contrast_css, unsafe_allow_html=True)
 
 # =====================================
 # HELPER FUNCTION TO ANALYZE DATA PATTERNS
@@ -533,7 +578,7 @@ def create_futuristic_graph(df):
             ),
             title=dict(
                 text='📊 CYBER THREAT INTELLIGENCE // VISUALIZATION MODULE',
-                font=dict(size=16, color='#06b6d4, family='JetBrains Mono'),
+                font=dict(size=16, color='#06b6d4', family='JetBrains Mono'),
                 x=0.5,
                 xanchor='center'
             ),
@@ -558,6 +603,7 @@ def create_futuristic_graph(df):
                     font=dict(size=10, color='#00f5ff', family='monospace'),
                     bgcolor='rgba(0,0,0,0.5)',
                     bordercolor='#00f5ff',
+                    borderwidth=1,
                     borderpad=4
                 )
             ]
@@ -1015,7 +1061,7 @@ def render_overview():
     # EXPLANATION: Project context
     st.markdown("""
     ### 🎓 **Research Context**
-    This system was developed as part of an **MSc Cybersecurity thesis** to address a critical gap: most security systems react to attacks after they happen, but this tool **predicts threats before they occur**.
+    This system was developed as part of an **MSc Cybersecurity thesis at Mount Kenya University** to address a critical gap: most security systems react to attacks after they happen, but this tool **predicts threats before they occur**.
     
     **The Problem**: Kenyan Government Digital Services face increasing cyber attacks, but traditional defenses only respond after damage occurs. This creates vulnerability windows.
     
@@ -1292,7 +1338,7 @@ def render_models():
     st.markdown("### 📊 **Complete Algorithm Benchmarking**")
     
     table_data = []
-    for name, value in results.items:
+    for name, value in results.items():
         is_active = name in active_algorithms
         status = "🟢 ACTIVE" if is_active else "⚪ STANDBY"
         table_data.append({
@@ -1473,82 +1519,22 @@ def render_parameters():
         st.success("✅ **STABLE OUTLOOK**: Projected parameters suggest manageable risk levels. Maintain standard monitoring and continue current security investments.")
 
 # =====================================
-# MAIN RENDERING WITH FIXED NAVIGATION
+# MAIN RENDERING BASED ON ACTIVE TAB
 # =====================================
+tab_functions = {
+    "home": render_home,
+    "data_upload": render_data_upload,
+    "overview": render_overview,
+    "dataset": render_dataset,
+    "models": render_models,
+    "parameters": render_parameters
+}
 
-# Create the fixed navigation bar using a container
-nav_container = st.container()
-
-with nav_container:
-    # Create columns for the fixed header
-    col_logo, col_title, col_nav = st.columns([1, 3, 6])
-    
-    with col_logo:
-        # Logo placeholder
-        st.markdown("### 🛡️")
-    
-    with col_title:
-        st.markdown('<span style="color: #06b6d4; font-size: 1.5rem; font-weight: 700; text-shadow: 0 0 10px rgba(6, 182, 212, 0.5);">CYBER THREAT INTELLIGENCE</span>', unsafe_allow_html=True)
-    
-    with col_nav:
-        # Navigation tabs using Streamlit native tabs - THIS IS CLICKABLE AND FIXED
-        tab_options = {
-            "home": "🏠 HOME",
-            "data_upload": "📤 DATA UPLOAD", 
-            "overview": "📄 PROJECT OVERVIEW",
-            "dataset": "📊 DATASET",
-            "models": "🤖 AI MODELS",
-            "parameters": "⚙️ PARAMETERS"
-        }
-        
-        # Use Streamlit tabs for navigation - they stay fixed at top
-        selected_tab = st.tabs(list(tab_options.values()))
-        
-        # Map tab selection to function
-        tab_mapping = {
-            "🏠 HOME": "home",
-            "📤 DATA UPLOAD": "data_upload",
-            "📄 PROJECT OVERVIEW": "overview",
-            "📊 DATASET": "dataset",
-            "🤖 AI MODELS": "models",
-            "⚙️ PARAMETERS": "parameters"
-        }
-        
-        # This is a placeholder - actual rendering happens below
-        pass
-
-# Render content based on session state (controlled by tabs)
-# Note: We use a workaround since st.tabs cannot directly control session state for routing
-# Instead, we use the fact that st.tabs will render the content inside them
-# But to keep your existing function structure, we'll use a different approach:
-
-# Actually, let's use the st.tabs properly to wrap the content
-tab_home, tab_upload, tab_overview, tab_dataset, tab_models, tab_params = st.tabs([
-    "🏠 HOME",
-    "📤 DATA UPLOAD",
-    "📄 PROJECT OVERVIEW",
-    "📊 DATASET",
-    "🤖 AI MODELS",
-    "⚙️ PARAMETERS"
-])
-
-with tab_home:
+active_tab = st.session_state.active_tab
+if active_tab in tab_functions:
+    tab_functions[active_tab]()
+else:
     render_home()
-
-with tab_upload:
-    render_data_upload()
-
-with tab_overview:
-    render_overview()
-
-with tab_dataset:
-    render_dataset()
-
-with tab_models:
-    render_models()
-
-with tab_params:
-    render_parameters()
 
 # =====================================
 # FOOTER - DYNAMIC YEAR
@@ -1557,7 +1543,7 @@ st.divider()
 st.markdown(f"""
 <div style="text-align: center; color: #64748b; padding: 20px;">
     <p style="margin: 0; font-size: 0.875rem;">
-        🛡️ CYBER THREAT INTELLIGENCE | © {current_year} RESEARCH PROJECT
+        🛡️ Cyber Threat Intelligence Platform | © {current_year}
     </p>
     <p style="margin: 8px 0 0 0; font-size: 0.75rem;">
         Data source: {get_current_data_source()} | Built with Streamlit
