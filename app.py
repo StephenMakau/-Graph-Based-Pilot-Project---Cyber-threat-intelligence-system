@@ -10,64 +10,6 @@ from plotly.subplots import make_subplots
 import numpy as np
 from pathlib import Path
 
-
-# =====================================
-# IN-PAGE NAVIGATION LINKS
-# =====================================
-# Markdown references such as "DATA UPLOAD tab" become clickable links.
-# The query parameter is read during the next Streamlit run and selects the
-# corresponding item in the fixed top navigation.
-TAB_LINKS = {
-    "OVERVIEW": "home",
-    "HOME": "home",
-    "DATA INTAKE": "data_upload",
-    "DATA UPLOAD": "data_upload",
-    "PROJECT NOTES": "overview",
-    "SYSTEM OVERVIEW": "overview",
-    "DATASET": "dataset",
-    "MODEL OUTPUTS": "models",
-    "MODELS": "models",
-    "CONFIGURATION": "parameters",
-    "PARAMETERS": "parameters",
-}
-
-
-def linkify_tab_references(body):
-    """Turn explicit references to a navigation tab into deep links."""
-    if not isinstance(body, str):
-        return body
-
-    # Only link references explicitly described as a tab, section, or page.
-    # This avoids linking ordinary uses of words such as "dataset".
-    pattern = re.compile(
-        r'(?P<bold>\*\*)?(?P<label>OVERVIEW|HOME|DATA INTAKE|DATA UPLOAD|'
-        r'PROJECT NOTES|SYSTEM OVERVIEW|DATASET|MODEL OUTPUTS|MODELS|'
-        r'CONFIGURATION|PARAMETERS)(?P=bold)(?P<suffix>\s+(?:tab|section|page)\b)',
-        flags=re.IGNORECASE,
-    )
-
-    def replace(match):
-        label = match.group("label")
-        target = TAB_LINKS.get(label.upper())
-        if not target:
-            return match.group(0)
-        display = f'**{label}**' if match.group("bold") else label
-        return f'[{display}](?tab={target}){match.group("suffix")}'
-
-    return pattern.sub(replace, body)
-
-
-def linked_markdown(body, *args, **kwargs):
-    # Preserve raw HTML blocks (watermark, cards, footer) exactly as authored.
-    if kwargs.get("unsafe_allow_html", False):
-        return st.markdown(body, *args, **kwargs)
-    return st.markdown(linkify_tab_references(body), *args, **kwargs)
-
-
-def linked_message(method, body, *args, **kwargs):
-    """Apply the same tab-link behaviour to Streamlit message/caption text."""
-    return method(linkify_tab_references(body), *args, **kwargs)
-
 # Import from your local model module
 from cyber_threat_model import (
     predict_2027,
@@ -111,18 +53,6 @@ if 'training_status' not in st.session_state:
 
 if 'active_tab' not in st.session_state:
     st.session_state.active_tab = "home"
-
-# Allow links inside explanations to open the corresponding top navigation tab.
-try:
-    requested_tab = st.query_params.get("tab")
-except Exception:
-    requested_tab = None
-
-valid_tabs = {"home", "data_upload", "overview", "dataset", "models", "parameters"}
-if requested_tab in valid_tabs:
-    st.session_state.active_tab = requested_tab
-    # Keep the keyed radio widget synchronised with the deep-linked destination.
-    st.session_state.nav_radio = requested_tab
 
 # Get current year from browser/system
 current_year = datetime.now().year
@@ -251,7 +181,7 @@ nav_css = f"""
     }}
 </style>
 """
-linked_markdown(nav_css, unsafe_allow_html=True)
+st.markdown(nav_css, unsafe_allow_html=True)
 
 with st.container(key="top_nav"):
     col_ham, col_title, col_nav = st.columns([0.7, 3.0, 10.5], vertical_alignment="center")
@@ -260,7 +190,7 @@ with st.container(key="top_nav"):
             st.session_state.controls_open = not st.session_state.controls_open
             st.rerun()
     with col_title:
-        linked_markdown(
+        st.markdown(
             f'<div style="color:{brand_color};font-size:.96rem;font-weight:650;letter-spacing:.035em;white-space:nowrap;">'
             'CTI <span style="display:inline-block;width:7px;height:7px;margin:0 7px 1px;border-radius:50%;background:#6f9f87;box-shadow:0 0 0 3px rgba(111,159,135,.13);"></span> CYBER THREAT INTELLIGENCE</div>',
             unsafe_allow_html=True
@@ -299,8 +229,8 @@ with st.sidebar:
             st.session_state.controls_open = False
             st.rerun()
     with heading_col:
-        linked_markdown("### SYSTEM CONTROLS")
-    linked_message(st.caption, "Appearance and display settings")
+        st.markdown("### SYSTEM CONTROLS")
+    st.caption("Appearance and display settings")
     st.divider()
 
     st.session_state.dark_mode = st.toggle(
@@ -317,10 +247,10 @@ with st.sidebar:
     st.divider()
     data_source = get_current_data_source()
     if data_source == "uploaded":
-        linked_message(st.success, ":material/analytics: Using: **Uploaded Data**")
+        st.success(":material/analytics: Using: **Uploaded Data**")
     else:
-        linked_message(st.info, ":material/analytics: Using: **Default Dataset**")
-    linked_message(st.caption, f"System time: {datetime.now(ZoneInfo('Africa/Nairobi')).strftime('%H:%M:%S EAT')}")
+        st.info(":material/analytics: Using: **Default Dataset**")
+    st.caption(f"System time: {datetime.now(ZoneInfo('Africa/Nairobi')).strftime('%H:%M:%S EAT')}")
 
 # =====================================
 # THEME CSS
@@ -519,7 +449,7 @@ contrast_css = f"""
     }}
 </style>
 """
-linked_markdown(theme_css + contrast_css, unsafe_allow_html=True)
+st.markdown(theme_css + contrast_css, unsafe_allow_html=True)
 # Reuse the browser favicon artwork as the large watermark emblem so the visual identity matches.
 try:
     watermark_svg = Path(__file__).with_name("cti_mark.svg").read_text(encoding="utf-8")
@@ -527,7 +457,7 @@ try:
     watermark_svg = re.sub(r'<rect[^>]*/>', '', watermark_svg, count=1)
 except (OSError, NameError):
     watermark_svg = ""
-linked_markdown(
+st.markdown(
     f'<div class="live-watermark" aria-hidden="true"><div class="watermark-logo">{watermark_svg}</div>'
     '<div class="watermark-label">CTI / LIVE SIGNAL MONITOR</div></div>',
     unsafe_allow_html=True
@@ -621,7 +551,7 @@ def create_futuristic_graph(df):
         df = df.sort_values('Date')
         
         if df.empty:
-            linked_message(st.error, "No valid data available for visualization.")
+            st.error("No valid data available for visualization.")
             return None
 
         # Create figure with secondary y-axis
@@ -844,7 +774,7 @@ def create_futuristic_graph(df):
         return fig
         
     except Exception as e:
-        linked_message(st.error, f":material/warning: Graph Generation Error: {str(e)}")
+        st.error(f":material/warning: Graph Generation Error: {str(e)}")
         return None
 
 # =====================================
@@ -852,12 +782,12 @@ def create_futuristic_graph(df):
 # =====================================
 def render_home():
     st.title(":material/shield: CYBER THREAT INTELLIGENCE")
-    linked_markdown("**Operator:** Stephen Musau Makau | **Clearance:** MSc Cybersecurity")
+    st.markdown("**Operator:** Stephen Musau Makau | **Clearance:** MSc Cybersecurity")
     
     mode_indicator = ":material/dark_mode: DARK" if st.session_state.dark_mode else ":material/light_mode: LIGHT"
     view_indicator = ":material/smartphone: MOBILE" if st.session_state.mobile_view else ":material/desktop_windows: DESKTOP"
     data_indicator = ":material/analytics: CUSTOM" if get_current_data_source() == "uploaded" else ":material/storage: DEFAULT"
-    linked_message(st.caption, f":material/schedule: SYS.TIME: {datetime.now(ZoneInfo('Africa/Nairobi')).strftime('%d/%m/%Y | %H:%M:%S')} EAT | STATUS: ONLINE | MODE: {mode_indicator} | VIEW: {view_indicator} | DATA: {data_indicator}")
+    st.caption(f":material/schedule: SYS.TIME: {datetime.now(ZoneInfo('Africa/Nairobi')).strftime('%d/%m/%Y | %H:%M:%S')} EAT | STATUS: ONLINE | MODE: {mode_indicator} | VIEW: {view_indicator} | DATA: {data_indicator}")
     
     st.divider()
 
@@ -868,7 +798,7 @@ def render_home():
         # Get all results for algorithm selection
         all_results = get_results()
     except Exception as e:
-        linked_message(st.error, f":material/warning: System Error: {e}")
+        st.error(f":material/warning: System Error: {e}")
         prediction = "Unknown"
         accuracy = 0.0
         all_results = {}
@@ -902,7 +832,7 @@ def render_home():
     st.header(":material/warning: THREAT PROJECTION // 2027")
     
     if prediction == "High":
-        linked_markdown(textwrap.dedent("""
+        st.markdown(textwrap.dedent("""
         <div class="threat-high threat-pulse">
             <svg class="ecg-wave" viewBox="0 0 240 44" aria-hidden="true"><path d="M0 23 H45 L57 23 L69 13 L80 34 L94 4 L108 30 L119 23 H240"/></svg>
             <h1><svg class="status-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 22 20H2L12 3Z"/><path d="M12 9v5M12 17h.01"/></svg>HIGH RISK DETECTED</h1>
@@ -910,10 +840,10 @@ def render_home():
             <p>Predictive algorithms indicate significant escalation in cyber threats targeting critical infrastructure. Immediate countermeasures required. Threat vectors include advanced persistent threats (APTs) and zero-day exploits.</p>
         </div>
         """), unsafe_allow_html=True)
-        linked_message(st.warning, ":material/warning: **Interpretation**: Historical data shows that when attack volumes exceed 4,000 (DDoS), 18,000 (Malware), and economic pressure indicators are elevated, threat levels typically spike to HIGH. Review defensive protocols immediately.")
+        st.warning(":material/warning: **Interpretation**: Historical data shows that when attack volumes exceed 4,000 (DDoS), 18,000 (Malware), and economic pressure indicators are elevated, threat levels typically spike to HIGH. Review defensive protocols immediately.")
         
     elif prediction == "Critical":
-        linked_markdown(textwrap.dedent("""
+        st.markdown(textwrap.dedent("""
         <div class="threat-critical threat-pulse">
             <svg class="ecg-wave" viewBox="0 0 240 44" aria-hidden="true"><path d="M0 23 H45 L57 23 L69 13 L80 34 L94 4 L108 30 L119 23 H240"/></svg>
             <h1><svg class="status-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m9 9 6 6m0-6-6 6"/></svg>CRITICAL ALERT</h1>
@@ -921,29 +851,29 @@ def render_home():
             <p>Maximum threat level detected. System predicts unprecedented attack surge. Emergency protocols activated. All defensive systems should be raised to maximum alert status immediately.</p>
         </div>
         """), unsafe_allow_html=True)
-        linked_message(st.error, ":material/report: **Interpretation**: The convergence of high CVE counts (95), low patch compliance (9 days delay), and economic instability historically correlates with CRITICAL threat periods. Immediate executive action required.")
+        st.error(":material/report: **Interpretation**: The convergence of high CVE counts (95), low patch compliance (9 days delay), and economic instability historically correlates with CRITICAL threat periods. Immediate executive action required.")
         
     else:
-        linked_markdown(textwrap.dedent("""
+        st.markdown(textwrap.dedent("""
         <div class="threat-moderate">
             <h1><svg class="status-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8 12 2.5 2.5L16 9"/></svg>STABLE STATUS</h1>
             <h3>THREAT_LEVEL: MODERATE</h3>
             <p>Threat parameters within acceptable ranges. Standard monitoring protocols sufficient. Continue baseline security operations and routine system audits.</p>
         </div>
         """), unsafe_allow_html=True)
-        linked_message(st.success, ":material/check_circle: **Interpretation**: Current projections indicate manageable threat levels. Attack volumes remain within historical norms and economic indicators suggest stable conditions. Maintain standard operations.")
+        st.success(":material/check_circle: **Interpretation**: Current projections indicate manageable threat levels. Attack volumes remain within historical norms and economic indicators suggest stable conditions. Maintain standard operations.")
 
     st.divider()
 
     # 3. FUTURISTIC GRAPH: Visual Data Intelligence
-    linked_markdown("### :material/radar: THREAT VISUALIZATION MATRIX")
+    st.markdown("### :material/radar: THREAT VISUALIZATION MATRIX")
     
     # Show current data source for the graph
     current_source = get_current_data_source()
     if current_source == "uploaded":
-        linked_message(st.info, ":material/analytics: Displaying **Uploaded Dataset** Visualization")
+        st.info(":material/analytics: Displaying **Uploaded Dataset** Visualization")
     else:
-        linked_message(st.info, ":material/analytics: Displaying **Default Dataset** Visualization")
+        st.info(":material/analytics: Displaying **Default Dataset** Visualization")
     
     # Get current dataset for visualization
     viz_data = get_dataset()
@@ -957,7 +887,7 @@ def render_home():
     
     # Graph explanation
     with st.expander(":material/menu_book: **Graph Interpretation Guide**", expanded=False):
-        linked_markdown(textwrap.dedent("""
+        st.markdown(textwrap.dedent("""
         **Understanding the Visualization:**
         
         **Top Panel - Attack Vectors:**
@@ -984,7 +914,7 @@ def render_home():
     st.divider()
 
     # 4. CONTEXT: System Metrics & Algorithm Info (Secondary Priority)
-    linked_markdown("###  THREAT ASSESSMENT MODULE")
+    st.markdown("###  THREAT ASSESSMENT MODULE")
     
     if st.session_state.mobile_view:
         c1, c2 = st.columns(2)
@@ -1020,7 +950,7 @@ def render_home():
             subtitle = "Meta.Ensemble.Active"
             desc = "Full Algorithmic Consensus | All three models achieving perfect accuracy - maximum reliability mode"
         
-        linked_markdown(textwrap.dedent(f"""
+        st.markdown(textwrap.dedent(f"""
         <div class="tech-container" style="text-align: center;">
             <h4 class="tech-label" style="margin:15px 0 0 0; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px;">Core Algorithm {'(s)' if len(best_algorithms) > 1 else ''}</h4>
             <h2 class="tech-code" style="margin: 20px 0; font-family: Arial, sans-serif; font-size: {'2.0rem' if len(best_algorithms) > 1 else '2.6rem'}; font-weight: 700;">{algo_code}</h2>
@@ -1031,15 +961,15 @@ def render_home():
         # Dynamic explanation based on which algorithm(s) won
         if len(best_algorithms) == 1:
             if "XGBoost" in best_algorithms[0]:
-                linked_message(st.caption, ":material/lightbulb: **XGBoost** uses gradient boosting to combine weak learners into a strong predictor. Excels at capturing non-linear relationships in cybersecurity data and handles imbalanced datasets effectively.")
+                st.caption(":material/lightbulb: **XGBoost** uses gradient boosting to combine weak learners into a strong predictor. Excels at capturing non-linear relationships in cybersecurity data and handles imbalanced datasets effectively.")
             elif "Random Forest" in best_algorithms[0]:
-                linked_message(st.caption, ":material/lightbulb: **Random Forest** builds multiple decision trees and merges their predictions. Reduces overfitting through bagging and provides robust performance across varied threat patterns.")
+                st.caption(":material/lightbulb: **Random Forest** builds multiple decision trees and merges their predictions. Reduces overfitting through bagging and provides robust performance across varied threat patterns.")
             elif "Logistic Regression" in best_algorithms[0]:
-                linked_message(st.caption, ":material/lightbulb: **Logistic Regression** provides a linear probabilistic approach. While simpler than ensemble methods, it offers high interpretability and efficient computation for real-time predictions.")
+                st.caption(":material/lightbulb: **Logistic Regression** provides a linear probabilistic approach. While simpler than ensemble methods, it offers high interpretability and efficient computation for real-time predictions.")
         elif len(best_algorithms) == 2:
-            linked_message(st.caption, f":material/lightbulb: **Dual Algorithm Mode**: Both {best_algorithms[0]} and {best_algorithms[1]} achieved optimal performance. The system leverages complementary strengths - ensemble diversity meets statistical rigor.")
+            st.caption(f":material/lightbulb: **Dual Algorithm Mode**: Both {best_algorithms[0]} and {best_algorithms[1]} achieved optimal performance. The system leverages complementary strengths - ensemble diversity meets statistical rigor.")
         else:
-            linked_message(st.caption, ":material/lightbulb: **Triple Consensus Mode**: All three algorithms achieved 100% accuracy on validation data. This rare state indicates extremely clear patterns in your dataset, providing maximum confidence in predictions.")
+            st.caption(":material/lightbulb: **Triple Consensus Mode**: All three algorithms achieved 100% accuracy on validation data. This rare state indicates extremely clear patterns in your dataset, providing maximum confidence in predictions.")
 
     with c2:
         st.metric(
@@ -1048,26 +978,26 @@ def render_home():
             help="Training validation score"
         )
         if best_acc_pct >= 99.9:
-            linked_message(st.caption, ":material/star: **PERFECT SCORE**: Optimal prediction reliability achieved. The model(s) correctly classified all validation samples.")
+            st.caption(":material/star: **PERFECT SCORE**: Optimal prediction reliability achieved. The model(s) correctly classified all validation samples.")
         elif best_acc_pct >= 90:
-            linked_message(st.caption, ":material/check_circle: **HIGH RELIABILITY**: Strong predictive performance suitable for operational deployment.")
+            st.caption(":material/check_circle: **HIGH RELIABILITY**: Strong predictive performance suitable for operational deployment.")
         else:
-            linked_message(st.caption, ":material/warning: **MODERATE RELIABILITY**: Consider uploading more historical data to improve accuracy.")
+            st.caption(":material/warning: **MODERATE RELIABILITY**: Consider uploading more historical data to improve accuracy.")
 
     with c3:
-        linked_markdown(textwrap.dedent("""
+        st.markdown(textwrap.dedent("""
         <div class="tech-container" style="text-align: center;">
             <h4 class="tech-label" style="margin:15px 0 0 0; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px;">Target Year</h4>
             <h2 class="tech-year" style="margin: 20px 0; font-family: Arial, sans-serif; font-size: 2.6rem; font-weight: 700;">2027</h2>
             <p class="tech-subtitle" style="font-size: 0.95rem; margin-bottom: 15px;">Forecast horizon</p>
         </div>
         """), unsafe_allow_html=True)
-        linked_message(st.caption, ":material/lightbulb: The model projects threat levels 2 years ahead using trend analysis of attack patterns, economic indicators, and system vulnerabilities from historical data.")
+        st.caption(":material/lightbulb: The model projects threat levels 2 years ahead using trend analysis of attack patterns, economic indicators, and system vulnerabilities from historical data.")
 
     st.divider()
 
     # 4. EDUCATION: Dynamic Methodology Based on Data Source
-    linked_markdown("### :material/psychology: **Prediction Methodology**")
+    st.markdown("### :material/psychology: **Prediction Methodology**")
     
     # Determine current data context
     data_source = get_current_data_source()
@@ -1089,8 +1019,8 @@ def render_home():
 
     # Dynamic Content Generation
     if is_custom_data:
-        linked_message(st.warning, ":material/warning: **Custom Dataset Detected**: The methodology below reflects patterns learned from your **uploaded data** rather than the default research dataset.")
-        linked_message(st.info, f"""
+        st.warning(":material/warning: **Custom Dataset Detected**: The methodology below reflects patterns learned from your **uploaded data** rather than the default research dataset.")
+        st.info(f"""
         **Adaptive Learning Protocol Active**
         
         The system has analyzed your uploaded dataset containing {len(get_dataset())} historical records. 
@@ -1106,7 +1036,7 @@ def render_home():
     else:
         # Default Dataset Logic (Original Behavior with Dynamic Algorithm Selection)
         if best_algorithms and len(best_algorithms) == 1 and "Logistic Regression" in best_algorithms[0]:
-            linked_message(st.info, """
+            st.info("""
             **How the 2027 Prediction is Generated (Logistic Regression Mode):**
             
             1. **Linear Classification**: The model calculates probability scores for each threat level (Medium/High/Critical) using weighted linear combinations of input features
@@ -1117,7 +1047,7 @@ def render_home():
             **Why This Matters**: While less complex than ensemble methods, logistic regression provides transparent, auditable predictions crucial for government security decisions.
             """)
         elif best_algorithms and len(best_algorithms) == 1 and "Random Forest" in best_algorithms[0]:
-            linked_message(st.info, """
+            st.info("""
             **How the 2027 Prediction is Generated (Random Forest Mode):**
             
             1. **Ensemble Voting**: 200 decision trees independently analyze the 2027 parameters and vote on threat classification
@@ -1129,7 +1059,7 @@ def render_home():
             """)
         else:
             # Default to XGBoost or Ensemble explanation
-            linked_message(st.info, """
+            st.info("""
             **How the 2027 Prediction is Generated:**
             
             1. **Data Input**: The model receives projected values for 12 parameters (DDoS attacks, malware volume, CVE counts, inflation, GDP, etc.)
@@ -1142,7 +1072,7 @@ def render_home():
 
     # EXPLANATION: What this page shows
     with st.expander(":material/menu_book: **How to Read This Dashboard**", expanded=False):
-        linked_markdown(textwrap.dedent("""
+        st.markdown(textwrap.dedent("""
         **Welcome to the Cyber Threat Intelligence System.** This dashboard predicts cyber threat levels for Kenyan Government Digital Services using Machine Learning.
         
         **Key Components:**
@@ -1160,14 +1090,14 @@ def render_home():
 
 def render_data_upload():
     st.title(" DATA UPLOAD CENTER")
-    linked_markdown("**Upload your own cybersecurity data to generate custom threat predictions**")
+    st.markdown("**Upload your own cybersecurity data to generate custom threat predictions**")
     
     st.divider()
     
     # STEP 1: Download Template
     st.header(" STEP 1: Download Template")
     
-    linked_markdown(textwrap.dedent("""
+    st.markdown(textwrap.dedent("""
     ###  **Data Format Requirements**
     
     Before uploading your data, download the Excel template below. Your file **must** contain these exact columns:
@@ -1201,14 +1131,14 @@ def render_data_upload():
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True
         )
-        linked_message(st.caption, " This template contains sample data showing exactly how to format your entries")
+        st.caption(" This template contains sample data showing exactly how to format your entries")
     
     st.divider()
     
     # STEP 2: Upload Data
     st.header(" STEP 2: Upload Your Data")
     
-    linked_markdown(textwrap.dedent("""
+    st.markdown(textwrap.dedent("""
     ###  **Upload Instructions**
     
     1. **Prepare your data** using the template above
@@ -1227,7 +1157,7 @@ def render_data_upload():
     )
     
     if uploaded_file is not None:
-        linked_message(st.success, f" File uploaded: **{uploaded_file.name}**")
+        st.success(f" File uploaded: **{uploaded_file.name}**")
         
         # Preview uploaded data
         try:
@@ -1236,14 +1166,14 @@ def render_data_upload():
             else:
                 df_preview = pd.read_excel(uploaded_file)
             
-            linked_markdown("### **Data Preview** (First 5 rows)")
+            st.markdown("### **Data Preview** (First 5 rows)")
             st.dataframe(df_preview.head(), use_container_width=True)
             
             # Validate data
             validation_result = validate_uploaded_data(df_preview)
             
             if validation_result['valid']:
-                linked_message(st.success, f" **Validation Passed**: {validation_result['message']}")
+                st.success(f" **Validation Passed**: {validation_result['message']}")
                 
                 # Train button
                 if st.button(" TRAIN MODEL WITH UPLOADED DATA", use_container_width=True, type="primary"):
@@ -1252,21 +1182,21 @@ def render_data_upload():
                         if success:
                             st.session_state.uploaded_data = df_preview
                             st.session_state.training_status = "success"
-                            linked_message(st.success, f" {message}")
+                            st.success(f" {message}")
                             st.balloons()
-                            linked_message(st.info, " Navigate to **HOME** tab to see updated graph with your data!")
+                            st.info(" Navigate to **HOME** tab to see updated graph with your data!")
                             # Force page rerun to refresh graph with new data
                             st.rerun()
                         else:
                             st.session_state.training_status = "error"
-                            linked_message(st.error, f" {message}")
+                            st.error(f" {message}")
             else:
-                linked_message(st.error, f" **Validation Failed**: {validation_result['message']}")
-                linked_message(st.warning, "Please fix the issues above and re-upload.")
+                st.error(f" **Validation Failed**: {validation_result['message']}")
+                st.warning("Please fix the issues above and re-upload.")
                 
         except Exception as e:
-            linked_message(st.error, f" Error reading file: {str(e)}")
-            linked_message(st.info, " Make sure your file is not corrupted and is in the correct format.")
+            st.error(f" Error reading file: {str(e)}")
+            st.info(" Make sure your file is not corrupted and is in the correct format.")
     
     st.divider()
     
@@ -1276,8 +1206,8 @@ def render_data_upload():
         st.session_state.uploaded_data = None
         # Reinitialize with default data
         train_on_uploaded_data(None)
-        linked_message(st.success, " System reset to default dataset")
-        linked_message(st.info, "The system is now using the original 2020-2025 research data.")
+        st.success(" System reset to default dataset")
+        st.info("The system is now using the original 2020-2025 research data.")
         # Force page rerun to refresh graph
         st.rerun()
 
@@ -1285,7 +1215,7 @@ def render_overview():
     st.title(" SYSTEM OVERVIEW")
     
     # EXPLANATION: Project context
-    linked_markdown(textwrap.dedent("""
+    st.markdown(textwrap.dedent("""
     ###  **Research Context**
     This system was developed as part of an **MSc Cybersecurity thesis at Mount Kenya University** to address a critical gap: most security systems react to attacks after they happen, but this tool **predicts threats before they occur**.
     
@@ -1302,14 +1232,14 @@ def render_overview():
         st.subheader(" THREAT LANDSCAPE")
         st.write("Digital transformation acceleration correlates with exponential threat growth.")
         st.subheader(" SYSTEM ARCHITECTURE")
-        linked_markdown(textwrap.dedent("""
+        st.markdown(textwrap.dedent("""
         - **Attack Vectors:** DDoS, Malware, Phishing
         - **Vulnerability Metrics:** CVE Criticality
         - **Network Intelligence:** Traffic Anomalies
         - **Economic Indicators:** Inflation/GDP correlation
         """))
         st.subheader(" OPERATIONAL IMPACT")
-        linked_markdown(textwrap.dedent("""
+        st.markdown(textwrap.dedent("""
         - Critical Infrastructure Protection
         - Resource Optimization
         - Policy Intelligence
@@ -1334,7 +1264,7 @@ def render_overview():
             """))
             
             # EXPLANATION: Why ML works here
-            linked_message(st.info, """
+            st.info("""
             **Why Machine Learning?**
             
             Traditional rule-based systems look for known attack signatures. ML discovers **hidden patterns** across multiple variables (e.g., when inflation rises above 7% AND patch delays exceed 10 days, threat levels typically spike within 3 months). These correlations are invisible to human analysts but detectable by algorithms.
@@ -1342,7 +1272,7 @@ def render_overview():
             
         with col2:
             st.subheader(" SYSTEM ARCHITECTURE")
-            linked_markdown(textwrap.dedent("""
+            st.markdown(textwrap.dedent("""
             **Core Engine**: XGBoost Neural Networks processing multi-dimensional correlation matrices:
             
             - **Attack Vectors**: DDoS, Malware, Phishing, Web Exploits
@@ -1356,7 +1286,7 @@ def render_overview():
             """))
             
             st.subheader(" OPERATIONAL IMPACT")
-            linked_markdown(textwrap.dedent("""
+            st.markdown(textwrap.dedent("""
             **Strategic Benefits**:
             - **Critical Infrastructure Protection**: Secure national digital assets preemptively
             - **Resource Optimization**: Allocate security budget efficiently based on predicted risk
@@ -1365,7 +1295,7 @@ def render_overview():
             - **Custom Analysis**: Upload your own data for organization-specific threat modeling
             """))
 
-    linked_message(st.info, " **SECURITY PROTOCOL**: All data displayed is synthetic/anonymized for research purposes. No real-time government data is exposed.")
+    st.info(" **SECURITY PROTOCOL**: All data displayed is synthetic/anonymized for research purposes. No real-time government data is exposed.")
 
 def render_dataset():
     st.title(" DATA MATRIX")
@@ -1375,12 +1305,12 @@ def render_dataset():
     
     # Show current data source
     if get_current_data_source() == "uploaded":
-        linked_message(st.success, " **Currently Displaying**: Your uploaded custom dataset")
+        st.success(" **Currently Displaying**: Your uploaded custom dataset")
     else:
-        linked_message(st.info, " **Currently Displaying**: Default research dataset (2020-2025)")
+        st.info(" **Currently Displaying**: Default research dataset (2020-2025)")
     
     # EXPLANATION: What the data represents
-    linked_markdown(textwrap.dedent("""
+    st.markdown(textwrap.dedent("""
     ###  **Understanding the Training Data**
     
     This dataset contains historical observations used to train the prediction model. 
@@ -1394,7 +1324,7 @@ def render_dataset():
     - **Target**: Threat_Level (Medium/High/Critical) - what the model learns to predict
     """))
     
-    linked_markdown("Accessing training datasets...")
+    st.markdown("Accessing training datasets...")
     
     height = 400 if st.session_state.mobile_view else 500
     st.dataframe(
@@ -1404,7 +1334,7 @@ def render_dataset():
     )
     
     # DYNAMIC PATTERN ANALYSIS
-    linked_markdown("---")
+    st.markdown("---")
     st.subheader(" **Key Patterns Visible in This Data**")
     
     # Analyze actual patterns in the current dataset
@@ -1412,10 +1342,10 @@ def render_dataset():
     
     # Display each pattern as a bullet point
     for pattern in patterns:
-        linked_markdown(f"• {pattern}")
+        st.markdown(f"• {pattern}")
     
     # Additional dataset statistics
-    linked_markdown("---")
+    st.markdown("---")
     st.subheader(" **Dataset Statistics**")
     
     col1, col2, col3, col4 = st.columns(4)
@@ -1432,9 +1362,9 @@ def render_dataset():
         year_range = f"{current_df['Year'].min()}-{current_df['Year'].max()}" if 'Year' in current_df.columns and not current_df.empty else "N/A"
         st.metric("Year Range", year_range)
     
-    linked_message(st.caption, " **Training Process**: The model learned these patterns to recognize that specific combinations of these values predict future threat levels.")
+    st.caption(" **Training Process**: The model learned these patterns to recognize that specific combinations of these values predict future threat levels.")
     
-    linked_message(st.info, " **Tip**: Upload your own data in the **DATA UPLOAD** tab to see patterns specific to your organization!")
+    st.info(" **Tip**: Upload your own data in the **DATA UPLOAD** tab to see patterns specific to your organization!")
 
 def render_models():
     st.title(" AI CORE PERFORMANCE")
@@ -1457,11 +1387,11 @@ def render_models():
     
     # Show current data source
     if get_current_data_source() == "uploaded":
-        linked_message(st.success, " **Models trained on**: Your uploaded custom dataset")
+        st.success(" **Models trained on**: Your uploaded custom dataset")
     else:
-        linked_message(st.info, " **Models trained on**: Default research dataset")
+        st.info(" **Models trained on**: Default research dataset")
     
-    linked_markdown("---")
+    st.markdown("---")
     
     # DISPLAY ACTIVE/WINNING ALGORITHMS SECTION
     if len(active_algorithms) == 1:
@@ -1469,7 +1399,7 @@ def render_models():
         st.header(f" ACTIVE ALGORITHM: {winner_name.upper()}")
         
         if "XGBoost" in winner_name:
-            linked_message(st.success, """
+            st.success("""
             ###  XGBoost (eXtreme Gradient Boosting)
             
             **Status**: ACTIVE | **Accuracy**: 100.00%
@@ -1486,7 +1416,7 @@ def render_models():
             **Best For**: Datasets with complex feature interactions and imbalanced classes (typical in cybersecurity)
             """)
         elif "Random Forest" in winner_name:
-            linked_message(st.success, """
+            st.success("""
             ###  Random Forest Classifier
             
             **Status**: ACTIVE | **Accuracy**: 100.00%
@@ -1503,7 +1433,7 @@ def render_models():
             **Best For**: Datasets where interpretability and robustness are equally important
             """)
         elif "Logistic Regression" in winner_name:
-            linked_message(st.success, """
+            st.success("""
             ###  Logistic Regression
             
             **Status**: ACTIVE | **Accuracy**: 100.00%
@@ -1522,7 +1452,7 @@ def render_models():
             
     elif len(active_algorithms) == 2:
         st.header(f" DUAL ENSEMBLE ACTIVE")
-        linked_message(st.success, f"""
+        st.success(f"""
         ###  Combined System: {' & '.join(active_algorithms)}
         
         **Status**: ACTIVE | **Accuracy**: 100.00%
@@ -1541,7 +1471,7 @@ def render_models():
         
     else:  # All three
         st.header(f" TRIPLE CONSENSUS MODE")
-        linked_message(st.success, """
+        st.success("""
         ###  ALL SYSTEMS ACTIVE: Logistic Regression + Random Forest + XGBoost
         
         **Status**: ACTIVE | **Accuracy**: 100.00%
@@ -1558,10 +1488,10 @@ def render_models():
         **Best For**: Mission-critical deployments where prediction confidence must be absolute
         """)
     
-    linked_markdown("---")
+    st.markdown("---")
     
     # EXPLANATION: Algorithm comparison table
-    linked_markdown("###  **Complete Algorithm Benchmarking**")
+    st.markdown("###  **Complete Algorithm Benchmarking**")
     
     table_data = []
     for name, value in results.items():
@@ -1576,13 +1506,13 @@ def render_models():
     st.table(table_data)
     
     # EXPLANATION: Results interpretation
-    linked_markdown("###  **Understanding the Results**")
+    st.markdown("###  **Understanding the Results**")
     
     col1, col2 = st.columns(2)
     with col1:
         if len(active_algorithms) == 1:
             winner = active_algorithms[0]
-            linked_message(st.info, f"""
+            st.info(f"""
             **Winner Analysis: {winner}**
             
             This algorithm achieved the highest accuracy on your specific dataset. 
@@ -1592,7 +1522,7 @@ def render_models():
             **Recommendation**: Deploy this algorithm for production predictions.
             """)
         else:
-            linked_message(st.info, f"""
+            st.info(f"""
             **Winners Analysis: {', '.join(active_algorithms)}**
             
             Multiple algorithms achieved perfect accuracy, indicating your dataset
@@ -1602,7 +1532,7 @@ def render_models():
             """)
     
     with col2:
-        linked_message(st.warning, """
+        st.warning("""
         **Algorithm Characteristics:**
         
         **Logistic Regression**: Linear, fast, interpretable
@@ -1624,7 +1554,7 @@ def render_parameters():
         params_df = get_parameters()
     
     # EXPLANATION: Parameters meaning with context
-    linked_markdown(textwrap.dedent(f"""
+    st.markdown(textwrap.dedent(f"""
     ###  **2027 Projection Parameters**
     
     **Current Prediction for 2027**: {' **MODERATE**' if current_prediction == 'Medium' else ' **HIGH**' if current_prediction == 'High' else ' **CRITICAL**' if current_prediction == 'Critical' else ' **Unknown**'}
@@ -1641,7 +1571,7 @@ def render_parameters():
     **Note**: These projections remain constant, but the model's interpretation changes based on patterns learned from your {'uploaded' if get_current_data_source() == 'uploaded' else 'default'} data!
     """))
     
-    linked_markdown("###  **Feature Configuration for 2027 Threat Projection**")
+    st.markdown("###  **Feature Configuration for 2027 Threat Projection**")
     
     height = 300 if st.session_state.mobile_view else 400
     st.dataframe(
@@ -1651,7 +1581,7 @@ def render_parameters():
     )
     
     # DATA-SPECIFIC PARAMETER ANALYSIS
-    linked_markdown("---")
+    st.markdown("---")
     st.subheader(" **Why These Parameters Lead to {}**".format(current_prediction if current_prediction != "Unknown" else "This Prediction"))
     
     # Get current dataset for comparison
@@ -1679,7 +1609,7 @@ def render_parameters():
         
         if not similar_periods.empty:
             similar_threats = similar_periods['Threat_Level'].value_counts()
-            linked_message(st.info, f"""
+            st.info(f"""
             **Historical Pattern Match**: The 2027 projection parameters closely resemble **{len(similar_periods)} historical period(s)** in your dataset.
             
             During similar conditions (DDoS >{ddos_2027*0.8:,.0f}, CVEs >{cve_2027*0.8:.0f}), the threat level was:
@@ -1713,15 +1643,15 @@ def render_parameters():
                 insights.append(f"• **Stable Economic Environment** contrasts with your data showing {high_threat_pct:.0f}% of High_Cost periods had elevated threats")
         
         if insights:
-            linked_markdown("###  **Key Parameter Insights**")
+            st.markdown("###  **Key Parameter Insights**")
             for insight in insights:
-                linked_markdown(insight)
+                st.markdown(insight)
     
     # EXPLANATION: Parameter significance
-    linked_markdown("---")
+    st.markdown("---")
     st.subheader(" **Parameter Significance Analysis**")
     
-    linked_message(st.warning, """
+    st.warning("""
     **Critical Insight: Parameter Significance**
     
     Analysis reveals which inputs most influence the threat prediction:
@@ -1738,11 +1668,11 @@ def render_parameters():
     
     # Context-specific recommendation
     if current_prediction == "Critical":
-        linked_message(st.error, " **CRITICAL RECOMMENDATION**: Given the projected parameters exceed multiple historical thresholds simultaneously, immediate executive review of security posture is advised.")
+        st.error(" **CRITICAL RECOMMENDATION**: Given the projected parameters exceed multiple historical thresholds simultaneously, immediate executive review of security posture is advised.")
     elif current_prediction == "High":
-        linked_message(st.warning, " **HIGH ALERT RECOMMENDATION**: Review defensive protocols and ensure patch management can maintain the projected 9-day deployment window.")
+        st.warning(" **HIGH ALERT RECOMMENDATION**: Review defensive protocols and ensure patch management can maintain the projected 9-day deployment window.")
     else:
-        linked_message(st.success, " **STABLE OUTLOOK**: Projected parameters suggest manageable risk levels. Maintain standard monitoring and continue current security investments.")
+        st.success(" **STABLE OUTLOOK**: Projected parameters suggest manageable risk levels. Maintain standard monitoring and continue current security investments.")
 
 # =====================================
 # MAIN RENDERING BASED ON ACTIVE TAB
@@ -1766,7 +1696,7 @@ else:
 # FOOTER - DYNAMIC YEAR
 # =====================================
 st.divider()
-linked_markdown(textwrap.dedent(f"""
+st.markdown(textwrap.dedent(f"""
 <div style="text-align: center; color: #64748b; padding: 20px;">
     <p style="margin: 0; font-size: 0.875rem;">
          Cyber Threat Intelligence Platform | © {current_year}
